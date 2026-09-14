@@ -3,33 +3,29 @@
 // Bottom navigation shell. Each tab hosts one of the existing screens.
 // The screens keep their own Scaffold/AppBar — we simply switch between
 // them with an IndexedStack so each tab preserves its state.
-
 import 'package:flutter/material.dart';
 import '../main.dart';
 import 'home_screen.dart';
 import 'market_screen.dart';
+import 'stocks_screen.dart';
 import 'funds_screen.dart';
 import 'doctor_screen.dart';
 import 'xray_screen.dart';
-
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
-
   @override
   State<MainShell> createState() => _MainShellState();
 }
-
 class _MainShellState extends State<MainShell> {
   int _index = 0;
-
   final _tabs = const [
     HomeScreen(),
     MarketScreen(),
+    StocksScreen(),
     FundsScreen(),
     DoctorScreen(),
     XrayScreen(),
   ];
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -49,6 +45,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.show_chart, color: Brand.mint),
             selectedIcon: Icon(Icons.show_chart, color: Brand.gold),
             label: 'Markets',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.candlestick_chart_outlined, color: Brand.mint),
+            selectedIcon: Icon(Icons.candlestick_chart, color: Brand.gold),
+            label: 'Stocks',
           ),
           NavigationDestination(
             icon: Icon(Icons.pie_chart_outline, color: Brand.mint),
