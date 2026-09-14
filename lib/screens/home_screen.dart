@@ -206,7 +206,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   return pool.where((s) => s.contains(q)).take(30);
                 },
                 onSelected: (s) => _openStock(s),
-                fieldViewBuilder:
+                                fieldViewBuilder:
                     (context, controller, focusNode, onSubmit) {
                   return TextField(
                     controller: controller,
@@ -220,6 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       prefixIcon:
                           const Icon(Icons.search, color: Brand.mint),
                     ),
+                    onChanged: (v) => _searchCtrl.text = v,
                     onSubmitted: (v) {
                       onSubmit();
                       _openStock(v);
