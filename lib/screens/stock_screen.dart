@@ -5,6 +5,7 @@
 // All data comes from /stock/{symbol}, which already returns every ratio.
 
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 
@@ -24,6 +25,10 @@ class _StockScreenState extends State<StockScreen>
   String? _error;
   bool _loading = true;
   late TabController _tabs;
+  List<dynamic> _candles = [];
+  bool _loadingChart = false;
+  String? _chartError;
+  String _chartPeriod = '1y';
 
   @override
   void initState() {
@@ -67,12 +72,30 @@ class _StockScreenState extends State<StockScreen>
     try {
       final d = await ApiService.getStock(widget.symbol);
       if (mounted) setState(() => _data = d);
+      _loadChart();
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
       if (mounted) setState(() => _error = 'Something went wrong: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadChart([String? period]) async {
+    final p = period ?? _chartPeriod;
+    setState(() {
+      _chartPeriod = p;
+      _loadingChart = true;
+      _chartError = null;
+    });
+    try {
+      final c = await ApiService.getHistory(widget.symbol, period: p);
+      if (mounted) setState(() => _candles = c);
+    } catch (e) {
+      if (mounted) setState(() => _chartError = 'Could not load chart data.');
+    } finally {
+      if (mounted) setState(() => _loadingChart = false);
     }
   }
 
@@ -205,6 +228,31 @@ class _StockScreenState extends State<StockScreen>
       children: [
         _partialBanner(),
         _priceHero(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: _RangeSelector(
+            selected: _chartPeriod,
+            onSelected: _loadChart,
+          ),
+        ),
+        Card(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
+            child: _loadingChart
+                ? const SizedBox(
+                    height: 220,
+                    child: Center(
+                        child: CircularProgressIndicator(color: Brand.gold)))
+                : _chartError != null
+                    ? SizedBox(
+                        height: 220,
+                        child: Center(
+                            child: Text(_chartError!,
+                                style: const TextStyle(color: Brand.mint))))
+                    : _PriceChart(candles: _candles),
+          ),
+        ),
         _group('TREND & MOMENTUM', [
           _Row('Trend', t['trend']?.toString() ?? '\u2014'),
           _Row('MA Signal', t['ma_signal']?.toString() ?? '\u2014'),
@@ -456,6 +504,131 @@ class _StockScreenState extends State<StockScreen>
       return v.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '');
     }
     return v.toString();
+  }
+}
+
+class _RangeSelector extends StatelessWidget {
+  const _RangeSelector({required this.selected, required this.onSelected});
+
+  final String selected;
+  final ValueChanged<String> onSelected;
+
+  static const _ranges = [
+    ('1W', '5d'),
+    ('1M', '1mo'),
+    ('3M', '3mo'),
+    ('6M', '6mo'),
+    ('1Y', '1y'),
+    ('5Y', '5y'),
+    ('All', 'max'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 36,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: _ranges.map((r) {
+          final active = r.$2 == selected;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: Text(r.$1),
+              selected: active,
+              onSelected: (_) => onSelected(r.$2),
+              selectedColor: Brand.gold,
+              backgroundColor: Brand.fern.withValues(alpha: 0.35),
+              labelStyle: TextStyle(
+                color: active ? Brand.vault : Brand.mint,
+                fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                fontSize: 12.5,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide.none,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _PriceChart extends StatelessWidget {
+  const _PriceChart({required this.candles});
+
+  final List<dynamic> candles;
+
+  @override
+  Widget build(BuildContext context) {
+    final spots = <FlSpot>[];
+    for (var i = 0; i < candles.length; i++) {
+      final c = candles[i];
+      if (c is! Map) continue;
+      final close = c['Close'];
+      if (close is num) spots.add(FlSpot(i.toDouble(), close.toDouble()));
+    }
+
+    if (spots.isEmpty) {
+      return const SizedBox(
+        height: 220,
+        child: Center(
+            child: Text('No chart data for this range.',
+                style: TextStyle(color: Brand.mint))),
+      );
+    }
+
+    final minY = spots.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+    final maxY = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    final pad = ((maxY - minY) * 0.08).clamp(0.01, double.infinity);
+    final isUp = spots.last.y >= spots.first.y;
+    final lineColor = isUp ? Brand.green : Brand.red;
+
+    return SizedBox(
+      height: 220,
+      child: LineChart(
+        LineChartData(
+          minY: minY - pad,
+          maxY: maxY + pad,
+          gridData: const FlGridData(show: false),
+          titlesData: const FlTitlesData(show: false),
+          borderData: FlBorderData(show: false),
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipItems: (touched) => touched
+                  .map((s) => LineTooltipItem(
+                        '\u20b9${s.y.toStringAsFixed(2)}',
+                        const TextStyle(
+                            color: Brand.paper, fontWeight: FontWeight.bold),
+                      ))
+                  .toList(),
+            ),
+          ),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: false,
+              color: lineColor,
+              barWidth: 2,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(
+                show: true,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    lineColor.withValues(alpha: 0.28),
+                    lineColor.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
