@@ -198,11 +198,11 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_sectors.isNotEmpty) const SizedBox(height: 10),
 
               // ---- search with autocomplete over ~500 stocks ----
-              Autocomplete<String>(
+                            Autocomplete<String>(
                 optionsBuilder: (TextEditingValue value) {
                   final q = value.text.trim().toUpperCase();
                   final pool = _filteredSymbols;
-                  if (q.isEmpty) return const Iterable<String>.empty();
+                  if (q.isEmpty) return pool.take(50);
                   return pool.where((s) => s.contains(q)).take(30);
                 },
                 onSelected: (s) => _openStock(s),
