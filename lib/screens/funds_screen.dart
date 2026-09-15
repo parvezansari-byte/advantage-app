@@ -813,14 +813,13 @@ class _FundDetailSheetState extends State<_FundDetailSheet> {
   }
 
   Widget _body(ScrollController controller) {
-    final fundRaw = _data!['fund'];
-    if (fundRaw == null || fundRaw is! Map) {
+    if (_data == null || _data!['name'] == null) {
       return _ErrorState(
         message: 'Fund details not found for "${widget.name}".',
         onRetry: _load,
       );
     }
-    final f = fundRaw.cast<String, dynamic>();
+    final f = _data!;
     final ranks = (_data!['ranks'] as Map?)?.cast<String, dynamic>() ?? {};
     final peers = (_data!['peers'] as List?) ?? [];
     final live = f['nav_live'] == true;
