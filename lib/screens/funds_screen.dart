@@ -501,6 +501,69 @@ class _NavStatusLine extends StatelessWidget {
 // FUND CARD
 // ===========================================================================
 
+class _AmcLogo extends StatelessWidget {
+  const _AmcLogo({required this.domain, required this.name, this.size = 32});
+
+  final String? domain;
+  final String name;
+  final double size;
+
+  static const _fallbackColors = [
+    Brand.gold,
+    Brand.blue,
+    Brand.purple,
+    Brand.teal,
+    Brand.green,
+  ];
+
+  Color _colorFor(String s) {
+    var hash = 0;
+    for (final c in s.codeUnits) {
+      hash = (hash + c) % _fallbackColors.length;
+    }
+    return _fallbackColors[hash];
+  }
+
+  Widget _letterAvatar() {
+    final trimmed = name.trim();
+    final letter = trimmed.isNotEmpty ? trimmed[0].toUpperCase() : '?';
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: _colorFor(name),
+      child: Text(
+        letter,
+        style: TextStyle(
+          color: Brand.vault,
+          fontWeight: FontWeight.bold,
+          fontSize: size * 0.4,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (domain == null || domain!.isEmpty) return _letterAvatar();
+
+    // Google's public favicon service - keyless, no signup (Clearbit's
+    // free logo API shut down in Dec 2025). Quality is favicon-grade, not
+    // a hi-res brand logo, but reliable and free. Any failure (network,
+    // no favicon) falls back to the colored initial above.
+    final url =
+        'https://www.google.com/s2/favicons?domain=$domain&sz=128';
+
+    return ClipOval(
+      child: Image.network(
+        url,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _letterAvatar(),
+      ),
+    );
+  }
+}
+
 class _FundCard extends StatelessWidget {
   const _FundCard({
     required this.fund,
@@ -551,6 +614,12 @@ class _FundCard extends StatelessWidget {
                             color: rank <= 3 ? Brand.gold : Brand.mint,
                             fontSize: 10,
                             fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 9),
+                  _AmcLogo(
+                    domain: fund['amc_domain'] as String?,
+                    name: '${fund['name']}',
+                    size: 28,
                   ),
                   const SizedBox(width: 9),
                   Expanded(
@@ -828,22 +897,42 @@ class _FundDetailSheetState extends State<_FundDetailSheet> {
       controller: controller,
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
       children: [
-        Text(_shortName('${f['name']}'),
-            style: const TextStyle(
-                color: Brand.paper,
-                fontSize: 16,
-                height: 1.35,
-                fontWeight: FontWeight.bold)),
-        const SizedBox(height: 6),
-        Text('${f['classification'] ?? ''}',
-            style: TextStyle(
-                color: Brand.gold.withValues(alpha: 0.9), fontSize: 11.5)),
-        if (f['manager'] != null) ...[
-          const SizedBox(height: 3),
-          Text('Managed by ${f['manager']}',
-              style: TextStyle(
-                  color: Brand.mint.withValues(alpha: 0.7), fontSize: 11)),
-        ],
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _AmcLogo(
+              domain: f['amc_domain'] as String?,
+              name: '${f['name']}',
+              size: 40,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_shortName('${f['name']}'),
+                      style: const TextStyle(
+                          color: Brand.paper,
+                          fontSize: 16,
+                          height: 1.35,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 6),
+                  Text('${f['classification'] ?? ''}',
+                      style: TextStyle(
+                          color: Brand.gold.withValues(alpha: 0.9),
+                          fontSize: 11.5)),
+                  if (f['manager'] != null) ...[
+                    const SizedBox(height: 3),
+                    Text('Managed by ${f['manager']}',
+                        style: TextStyle(
+                            color: Brand.mint.withValues(alpha: 0.7),
+                            fontSize: 11)),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
 
         const SizedBox(height: 16),
 

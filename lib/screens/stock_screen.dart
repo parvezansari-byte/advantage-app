@@ -149,16 +149,31 @@ class _StockScreenState extends State<StockScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text((f['name'] ?? widget.symbol).toString(),
-                style: const TextStyle(
-                    color: Brand.paper,
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold)),
-            if (f['sector'] != null)
-              Text(
-                '${f['sector']}${f['market_cap_cr'] != null ? '  \u00b7  \u20b9${_fmt(f['market_cap_cr'])} cr mcap' : ''}',
-                style: const TextStyle(color: Brand.mint, fontSize: 12),
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _StockLogo(isin: f['isin']?.toString(), symbol: widget.symbol),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text((f['name'] ?? widget.symbol).toString(),
+                          style: const TextStyle(
+                              color: Brand.paper,
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold)),
+                      if (f['sector'] != null)
+                        Text(
+                          '${f['sector']}${f['market_cap_cr'] != null ? '  \u00b7  \u20b9${_fmt(f['market_cap_cr'])} cr mcap' : ''}',
+                          style: const TextStyle(
+                              color: Brand.mint, fontSize: 12),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 14),
             Text(price != null ? '\u20b9${_fmt(price)}' : '\u2014',
                 style: const TextStyle(
@@ -504,6 +519,82 @@ class _StockScreenState extends State<StockScreen>
       return v.toStringAsFixed(2).replaceAll(RegExp(r'\.00$'), '');
     }
     return v.toString();
+  }
+}
+
+class _StockLogo extends StatelessWidget {
+  const _StockLogo({required this.isin, required this.symbol});
+
+  final String? isin;
+  final String symbol;
+
+  static const _fallbackColors = [
+    Brand.gold,
+    Brand.blue,
+    Brand.purple,
+    Brand.teal,
+    Brand.green,
+  ];
+
+  Color _colorFor(String s) {
+    var hash = 0;
+    for (final c in s.codeUnits) {
+      hash = (hash + c) % _fallbackColors.length;
+    }
+    return _fallbackColors[hash];
+  }
+
+  Widget _letterAvatar() {
+    final letters = symbol.length >= 2 ? symbol.substring(0, 2) : symbol;
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: _colorFor(symbol),
+      child: Text(
+        letters,
+        style: const TextStyle(
+          color: Brand.vault,
+          fontWeight: FontWeight.bold,
+          fontSize: 13,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isin == null || isin!.isEmpty) return _letterAvatar();
+
+    // Free public logo CDN for Indian securities, keyed by ISIN. Coverage
+    // isn't complete for every listed stock, so any failure (404, load
+    // error) falls back to a colored letter avatar rather than a broken
+    // image icon.
+    final url =
+        'https://cdn.jsdelivr.net/npm/@extra-isin/logos/data/$isin.png';
+
+    return ClipOval(
+      child: Image.network(
+        url,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return const SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Brand.mint),
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) => _letterAvatar(),
+      ),
+    );
   }
 }
 
