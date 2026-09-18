@@ -42,6 +42,132 @@ class ApiService {
     throw ApiException('Could not load market indices');
   }
 
+  // =========================================================================
+  // MARKET MOOD
+  // =========================================================================
+
+  /// Composite Fear/Greed score + 5-signal breakdown for the Indian market.
+  static Future<Map<String, dynamic>> getMarketMood() async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/market/mood'))
+        .timeout(_timeout);
+    if (r.statusCode == 200) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    }
+    throw ApiException('Could not load market mood');
+  }
+
+  /// India VIX daily history for the given period (1mo/3mo/6mo/1y).
+  static Future<List<dynamic>> getVixHistory({String period = '6mo'}) async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/market/mood/vix-history?period=$period'))
+        .timeout(_timeout);
+    if (r.statusCode == 200) {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      return (data['points'] as List<dynamic>?) ?? [];
+    }
+    throw ApiException('Could not load VIX history');
+  }
+
+  /// Today's India VIX at 5-minute intervals.
+  static Future<List<dynamic>> getVixIntraday() async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/market/mood/vix-intraday'))
+        .timeout(_timeout);
+    if (r.statusCode == 200) {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      return (data['points'] as List<dynamic>?) ?? [];
+    }
+    throw ApiException('Could not load intraday VIX');
+  }
+
+  /// AI-generated plain-English analysis of the current mood reading.
+  /// Pass the full map returned by getMarketMood() straight through.
+  static Future<String> getMoodAiAnalysis(Map<String, dynamic> mood) async {
+    final r = await http
+        .post(
+          Uri.parse('$baseUrl/market/mood/ai-analysis'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'composite': mood['composite'],
+            'zone': mood['zone'],
+            'as_of': mood['as_of'],
+            'scores': mood['scores'],
+            'details': mood['details'],
+          }),
+        )
+        .timeout(const Duration(seconds: 45));
+    if (r.statusCode == 200) {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      return (data['analysis'] as String?) ?? '';
+    }
+    throw ApiException('Could not generate AI analysis');
+  }
+
+  // =========================================================================
+  // MARKET INTELLIGENCE
+  // =========================================================================
+
+  /// Live 10-instrument snapshot (Global/India/Commodities/Currency) with
+  /// notable-move detection and sector impact already computed server-side.
+  static Future<Map<String, dynamic>> getMarketIntelligenceSnapshot() async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/market/intelligence/snapshot'))
+        .timeout(_timeout);
+    if (r.statusCode == 200) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    }
+    throw ApiException('Could not load market intelligence snapshot');
+  }
+
+  /// AI-generated "why it happened" context for one notable move.
+  static Future<String> getIntelligenceWhy({
+    required String instrument,
+    required double changePct,
+    required double threshold,
+  }) async {
+    final r = await http
+        .post(
+          Uri.parse('$baseUrl/market/intelligence/why'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'instrument': instrument,
+            'change_pct': changePct,
+            'threshold': threshold,
+          }),
+        )
+        .timeout(const Duration(seconds: 45));
+    if (r.statusCode == 200) {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      return (data['analysis'] as String?) ?? '';
+    }
+    throw ApiException('Could not generate context');
+  }
+
+  // =========================================================================
+  // GENERIC AI ANALYSIS  (stock or fund, reuses /ai/analyse)
+  // =========================================================================
+
+  /// Plain-English AI analysis of a stock or fund's real data.
+  /// [facts] is whatever map of fields you already have (fundamentals for
+  /// a stock, the fund detail map for a fund) - the backend only reads
+  /// non-empty values, so extra keys are harmless.
+  static Future<String> getAiAnalysis(Map<String, dynamic> facts,
+      {required String kind}) async {
+    final r = await http
+        .post(
+          Uri.parse('$baseUrl/ai/analyse'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'facts': facts, 'kind': kind}),
+        )
+        .timeout(const Duration(seconds: 45));
+    if (r.statusCode == 200) {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      return (data['analysis'] as String?) ?? '';
+    }
+    throw ApiException('Could not generate AI analysis');
+  }
+
   /// The full searchable stock universe (~500 NIFTY names).
   static Future<List<String>> getStockList() async {
     final r =

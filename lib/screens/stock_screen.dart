@@ -29,6 +29,9 @@ class _StockScreenState extends State<StockScreen>
   bool _loadingChart = false;
   String? _chartError;
   String _chartPeriod = '1y';
+  String? _aiAnalysis;
+  bool _loadingAi = false;
+  String? _aiError;
 
   @override
   void initState() {
@@ -96,6 +99,23 @@ class _StockScreenState extends State<StockScreen>
       if (mounted) setState(() => _chartError = 'Could not load chart data.');
     } finally {
       if (mounted) setState(() => _loadingChart = false);
+    }
+  }
+
+  Future<void> _generateAiAnalysis() async {
+    final f = (_data?['fundamentals'] ?? {}) as Map<String, dynamic>;
+    if (f.isEmpty) return;
+    setState(() {
+      _loadingAi = true;
+      _aiError = null;
+    });
+    try {
+      final text = await ApiService.getAiAnalysis(f, kind: 'stock');
+      if (mounted) setState(() => _aiAnalysis = text);
+    } catch (e) {
+      if (mounted) setState(() => _aiError = 'Could not generate analysis: $e');
+    } finally {
+      if (mounted) setState(() => _loadingAi = false);
     }
   }
 
@@ -232,6 +252,7 @@ class _StockScreenState extends State<StockScreen>
           _Row('Free Cashflow', '\u20b9${_fmt(f['free_cashflow_cr'])} cr'),
           _Row('Operating Cashflow', '\u20b9${_fmt(f['operating_cashflow_cr'])} cr'),
         ]),
+        _aiAnalysisCard(),
         _disclaimer(),
       ],
     );
@@ -503,6 +524,62 @@ class _StockScreenState extends State<StockScreen>
     );
   }
 
+  Widget _aiAnalysisCard() {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('AI ANALYSIS',
+                style: TextStyle(
+                    color: Brand.gold,
+                    fontSize: 12,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (_aiAnalysis == null && !_loadingAi)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _generateAiAnalysis,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Brand.gold,
+                    side: const BorderSide(color: Brand.gold),
+                  ),
+                  icon: const Icon(Icons.auto_awesome, size: 18),
+                  label: const Text('Generate AI Analysis'),
+                ),
+              )
+            else if (_loadingAi)
+              const Center(
+                  child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: CircularProgressIndicator(color: Brand.gold),
+              ))
+            else if (_aiError != null)
+              Text(_aiError!, style: const TextStyle(color: Brand.red))
+            else ...[
+              _MarkdownBoldText(text: _aiAnalysis ?? ''),
+              const SizedBox(height: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Brand.mint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('AI-generated \u2014 not financial advice',
+                    style: TextStyle(color: Brand.mint, fontSize: 10.5)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _disclaimer() => Padding(
         padding: const EdgeInsets.all(16),
         child: Text(
@@ -758,5 +835,31 @@ class _ErrorView extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// Renders **bold** markers from the AI's markdown-ish response as actual
+// bold text, since there's no full markdown renderer wired in here.
+class _MarkdownBoldText extends StatelessWidget {
+  const _MarkdownBoldText({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = <InlineSpan>[];
+    final parts = text.split('**');
+    for (int i = 0; i < parts.length; i++) {
+      spans.add(TextSpan(
+        text: parts[i],
+        style: TextStyle(
+          color: Brand.paper,
+          fontSize: 13,
+          height: 1.5,
+          fontWeight: i.isOdd ? FontWeight.bold : FontWeight.normal,
+        ),
+      ));
+    }
+    return RichText(text: TextSpan(children: spans));
   }
 }

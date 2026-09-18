@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/api_service.dart';
+import 'market_mood_screen.dart';
+import 'market_intelligence_screen.dart';
 
 class MarketScreen extends StatefulWidget {
   const MarketScreen({super.key});
@@ -79,9 +81,49 @@ class _MarketScreenState extends State<MarketScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            const Text('Live Indian indices · refreshes every minute',
+            const Text('Live Indian indices Â· refreshes every minute',
                 style: TextStyle(color: Brand.mint, fontSize: 13)),
             const SizedBox(height: 16),
+
+            Row(
+              children: [
+                Expanded(
+                  child: _NavCard(
+                    icon: Icons.thermostat,
+                    label: 'Market Mood',
+                    subtitle: 'Fear / Greed gauge',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const MarketMoodScreen()),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _NavCard(
+                    icon: Icons.public,
+                    label: 'Market Intelligence',
+                    subtitle: 'Live cross-asset snapshot',
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const MarketIntelligenceScreen()),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+
+            const Text('LIVE INDICES',
+                style: TextStyle(
+                    color: Brand.gold,
+                    fontSize: 12,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+
             if (_loading && _indices.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 80),
@@ -213,5 +255,51 @@ class _MarketScreenState extends State<MarketScreen> {
     final m = t.minute.toString().padLeft(2, '0');
     final s = t.second.toString().padLeft(2, '0');
     return '$h:$m:$s';
+  }
+}
+
+class _NavCard extends StatelessWidget {
+  const _NavCard({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Brand.fern.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Brand.gold.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: Brand.gold, size: 22),
+            const SizedBox(height: 8),
+            Text(label,
+                style: const TextStyle(
+                    color: Brand.paper,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                style: TextStyle(
+                    color: Brand.mint.withValues(alpha: 0.7), fontSize: 10.5)),
+          ],
+        ),
+      ),
+    );
   }
 }

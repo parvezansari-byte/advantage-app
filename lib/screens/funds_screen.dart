@@ -825,6 +825,9 @@ class _FundDetailSheetState extends State<_FundDetailSheet> {
   Map<String, dynamic>? _data;
   bool _loading = true;
   String? _error;
+  String? _aiAnalysis;
+  bool _loadingAi = false;
+  String? _aiError;
 
   @override
   void initState() {
@@ -840,6 +843,22 @@ class _FundDetailSheetState extends State<_FundDetailSheet> {
       if (mounted) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _generateAiAnalysis() async {
+    if (_data == null) return;
+    setState(() {
+      _loadingAi = true;
+      _aiError = null;
+    });
+    try {
+      final text = await ApiService.getAiAnalysis(_data!, kind: 'fund');
+      if (mounted) setState(() => _aiAnalysis = text);
+    } catch (e) {
+      if (mounted) setState(() => _aiError = 'Could not generate analysis: $e');
+    } finally {
+      if (mounted) setState(() => _loadingAi = false);
     }
   }
 
@@ -1187,6 +1206,8 @@ class _FundDetailSheetState extends State<_FundDetailSheet> {
         ],
 
         const SizedBox(height: 16),
+        _aiAnalysisCard(),
+        const SizedBox(height: 16),
         Text(
           'Regular plan figures. Direct plans of the same scheme have a lower '
           'expense ratio and higher returns. Metrics are from a monthly '
@@ -1198,6 +1219,61 @@ class _FundDetailSheetState extends State<_FundDetailSheet> {
               height: 1.45),
         ),
       ],
+    );
+  }
+
+  Widget _aiAnalysisCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('AI ANALYSIS',
+                style: TextStyle(
+                    color: Brand.gold,
+                    fontSize: 12,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            if (_aiAnalysis == null && !_loadingAi)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _generateAiAnalysis,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Brand.gold,
+                    side: const BorderSide(color: Brand.gold),
+                  ),
+                  icon: const Icon(Icons.auto_awesome, size: 18),
+                  label: const Text('Generate AI Analysis'),
+                ),
+              )
+            else if (_loadingAi)
+              const Center(
+                  child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: CircularProgressIndicator(color: Brand.gold),
+              ))
+            else if (_aiError != null)
+              Text(_aiError!, style: const TextStyle(color: Brand.red))
+            else ...[
+              _MarkdownBoldText(text: _aiAnalysis ?? ''),
+              const SizedBox(height: 10),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Brand.mint.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('AI-generated \u2014 not financial advice',
+                    style: TextStyle(color: Brand.mint, fontSize: 10.5)),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -1552,5 +1628,31 @@ class _ErrorState extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// Renders **bold** markers from the AI's markdown-ish response as actual
+// bold text, since there's no full markdown renderer wired in here.
+class _MarkdownBoldText extends StatelessWidget {
+  const _MarkdownBoldText({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = <InlineSpan>[];
+    final parts = text.split('**');
+    for (int i = 0; i < parts.length; i++) {
+      spans.add(TextSpan(
+        text: parts[i],
+        style: TextStyle(
+          color: Brand.paper,
+          fontSize: 13,
+          height: 1.5,
+          fontWeight: i.isOdd ? FontWeight.bold : FontWeight.normal,
+        ),
+      ));
+    }
+    return RichText(text: TextSpan(children: spans));
   }
 }
