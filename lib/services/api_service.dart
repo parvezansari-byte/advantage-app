@@ -14,6 +14,7 @@
 //   Deployed backend : https://your-api.onrender.com
 
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -166,6 +167,44 @@ class ApiService {
       return (data['analysis'] as String?) ?? '';
     }
     throw ApiException('Could not generate AI analysis');
+  }
+
+  /// Full research report PDF (score, fundamentals, analyst consensus,
+  /// trend tables, dividends, risk flags, AI analysis, recent news, and
+  /// links). Can take 30-90+ seconds since it chains several data-source
+  /// calls plus an AI request - the caller should show a clear "this
+  /// takes a while" loading state, not a normal short spinner.
+  /// Fast JSON preview of the research report - score, consensus,
+  /// fundamentals, 5Y range, risk flags, and links - shown inline before
+  /// generating the full PDF.
+  static Future<Map<String, dynamic>> getResearchSummary(String symbol) async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/stock/$symbol/research-summary'))
+        .timeout(_timeout);
+    if (r.statusCode == 200) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    }
+    try {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      throw ApiException('${data['detail'] ?? 'Could not load research summary'}');
+    } catch (_) {
+      throw ApiException('Could not load research summary');
+    }
+  }
+
+  static Future<Uint8List> getResearchReportPdf(String symbol) async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/stock/$symbol/research-pdf'))
+        .timeout(const Duration(seconds: 120));
+    if (r.statusCode == 200) {
+      return r.bodyBytes;
+    }
+    try {
+      final data = jsonDecode(r.body) as Map<String, dynamic>;
+      throw ApiException('${data['detail'] ?? 'Could not generate report'}');
+    } catch (_) {
+      throw ApiException('Could not generate report (${r.statusCode})');
+    }
   }
 
   /// The full searchable stock universe (~500 NIFTY names).

@@ -8,6 +8,7 @@ import '../main.dart';
 import 'home_screen.dart';
 import 'market_screen.dart';
 import 'stocks_screen.dart';
+import 'research_reports_screen.dart';
 import 'funds_screen.dart';
 import 'doctor_screen.dart';
 import 'xray_screen.dart';
@@ -22,6 +23,7 @@ class _MainShellState extends State<MainShell> {
     HomeScreen(),
     MarketScreen(),
     StocksScreen(),
+    ResearchReportsScreen(),
     FundsScreen(),
     DoctorScreen(),
     XrayScreen(),
@@ -50,6 +52,11 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(Icons.candlestick_chart_outlined, color: Brand.mint),
             selectedIcon: Icon(Icons.candlestick_chart, color: Brand.gold),
             label: 'Stocks',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.picture_as_pdf_outlined, color: Brand.mint),
+            selectedIcon: Icon(Icons.picture_as_pdf, color: Brand.gold),
+            label: 'Reports',
           ),
           NavigationDestination(
             icon: Icon(Icons.pie_chart_outline, color: Brand.mint),
