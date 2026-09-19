@@ -7,6 +7,7 @@
 // Home keeps its own shortcuts too.
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../main.dart';
 import '../services/auth_service.dart';
 import 'doctor_screen.dart';
@@ -218,7 +219,85 @@ class MoreScreen extends StatelessWidget {
               builder: (email) => FinanceScreen(userEmail: email),
             ),
           ),
+          const SizedBox(height: 18),
+
+          _ExternalLinksSection(),
         ],
+      ),
+    );
+  }
+}
+
+class _ExternalLinksSection extends StatelessWidget {
+  static const _links = [
+    ('AdvisorKhoj', 'https://www.advisorkhoj.com', '\ud83c\udfaf'),
+    ('Value Research', 'https://www.valueresearchonline.com', '\u2705'),
+    ('Morningstar India', 'https://www.morningstar.in', '\ud83c\udf1f'),
+    ('Moneycontrol', 'https://www.moneycontrol.com', '\ud83d\udcb0'),
+    ('AMFI India', 'https://www.amfiindia.com', '\ud83c\udfdb\ufe0f'),
+    ('NSE India', 'https://www.nseindia.com', '\ud83d\udcc8'),
+    ('Wealthy', 'https://www.wealthy.in', '\ud83d\udcbc'),
+  ];
+
+  Future<void> _open(BuildContext context, String url) async {
+    try {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open that link.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          initiallyExpanded: false,
+          leading: const Icon(Icons.link, color: Brand.gold, size: 18),
+          title: const Text('EXTERNAL RESEARCH LINKS',
+              style: TextStyle(
+                  color: Brand.paper,
+                  fontSize: 12.5,
+                  letterSpacing: 0.6,
+                  fontWeight: FontWeight.bold)),
+          iconColor: Brand.mint,
+          collapsedIconColor: Brand.mint,
+          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _links.map((l) {
+                final (label, url, emoji) = l;
+                return OutlinedButton(
+                  onPressed: () => _open(context, url),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Brand.paper,
+                    side: BorderSide(color: Brand.mint.withValues(alpha: 0.35)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(emoji, style: const TextStyle(fontSize: 14)),
+                      const SizedBox(width: 6),
+                      Text(label, style: const TextStyle(fontSize: 12.5)),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
       ),
     );
   }
