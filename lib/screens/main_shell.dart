@@ -3,15 +3,18 @@
 // Bottom navigation shell. Each tab hosts one of the existing screens.
 // The screens keep their own Scaffold/AppBar — we simply switch between
 // them with an IndexedStack so each tab preserves its state.
+//
+// Trimmed to 5 tabs (Research, Markets, Stocks, Funds, More) so the bar
+// doesn't get crowded — Doctor, Reports, and everything else now live
+// inside the More tab (see more_screen.dart), alongside Home's own
+// menu-card shortcuts to the same screens.
 import 'package:flutter/material.dart';
 import '../main.dart';
 import 'home_screen.dart';
 import 'market_screen.dart';
 import 'stocks_screen.dart';
-import 'research_reports_screen.dart';
 import 'funds_screen.dart';
-import 'doctor_screen.dart';
-import 'xray_screen.dart';
+import 'more_screen.dart';
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
   @override
@@ -23,10 +26,8 @@ class _MainShellState extends State<MainShell> {
     HomeScreen(),
     MarketScreen(),
     StocksScreen(),
-    ResearchReportsScreen(),
     FundsScreen(),
-    DoctorScreen(),
-    XrayScreen(),
+    MoreScreen(),
   ];
   @override
   Widget build(BuildContext context) {
@@ -54,24 +55,14 @@ class _MainShellState extends State<MainShell> {
             label: 'Stocks',
           ),
           NavigationDestination(
-            icon: Icon(Icons.picture_as_pdf_outlined, color: Brand.mint),
-            selectedIcon: Icon(Icons.picture_as_pdf, color: Brand.gold),
-            label: 'Reports',
-          ),
-          NavigationDestination(
             icon: Icon(Icons.pie_chart_outline, color: Brand.mint),
             selectedIcon: Icon(Icons.pie_chart, color: Brand.gold),
             label: 'Funds',
           ),
           NavigationDestination(
-            icon: Icon(Icons.medical_services_outlined, color: Brand.mint),
-            selectedIcon: Icon(Icons.medical_services, color: Brand.gold),
-            label: 'Doctor',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.biotech_outlined, color: Brand.mint),
-            selectedIcon: Icon(Icons.biotech, color: Brand.gold),
-            label: 'X-ray',
+            icon: Icon(Icons.more_horiz, color: Brand.mint),
+            selectedIcon: Icon(Icons.more_horiz, color: Brand.gold),
+            label: 'More',
           ),
         ],
       ),
