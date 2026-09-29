@@ -1055,6 +1055,33 @@ class ApiService {
     if (r.statusCode == 200) return;
     throw ApiException('Could not delete pending payment (${r.statusCode})');
   }
+
+  // =========================================================================
+  // MACRO / MARKET REPORT — period: 'daily' | 'weekly' | 'monthly'
+  // =========================================================================
+
+  /// Real market snapshot (indices/commodities/currency/VIX/FII-DII) plus a
+  /// data-grounded AI narrative for the chosen period.
+  static Future<Map<String, dynamic>> getMacroReport(String period) async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/market/macro-report?period=$period'))
+        .timeout(const Duration(seconds: 90));
+    if (r.statusCode == 200) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    }
+    throw ApiException('Could not load market report (${r.statusCode})');
+  }
+
+  /// The same report rendered as a styled, shareable PDF.
+  static Future<Uint8List> getMacroReportPdf(String period) async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/market/macro-report/pdf?period=$period'))
+        .timeout(const Duration(seconds: 120));
+    if (r.statusCode == 200) {
+      return r.bodyBytes;
+    }
+    throw ApiException('Could not generate report PDF (${r.statusCode})');
+  }
 }
 
 /// A friendly error we can show the user, rather than a raw exception.

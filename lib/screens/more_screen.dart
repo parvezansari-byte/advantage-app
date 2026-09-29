@@ -27,6 +27,7 @@ import 'lifestyle_screen.dart';
 import 'calculator_screen.dart';
 import 'tax_screen.dart';
 import 'finance_screen.dart';
+import 'macro_report_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -77,6 +78,14 @@ class MoreScreen extends StatelessWidget {
             subtitle: 'Full PDF report with AI analysis and links',
             onTap: () => Navigator.push(context,
                 MaterialPageRoute(builder: (_) => const ResearchReportsScreen())),
+          ),
+          _MenuCard(
+            icon: Icons.article_outlined,
+            iconColor: Brand.blue,
+            title: 'Market Report',
+            subtitle: 'Daily / weekly / monthly macro snapshot PDF',
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const MacroReportScreen())),
           ),
           const SizedBox(height: 18),
 
