@@ -136,14 +136,32 @@ class _MacroReportScreenState extends State<MacroReportScreen> {
   List<Widget> _reportViews(Map<String, dynamic> report) {
     final snapshot = (report['snapshot'] as List<dynamic>? ?? []);
     final fiiDii = report['fii_dii'] as Map<String, dynamic>?;
+    final news = (report['news'] as List<dynamic>? ?? []);
     final aiSummary = (report['ai_summary'] ?? '').toString();
     final generatedAt = (report['generated_at'] ?? '').toString();
+    final tone = (report['tone'] ?? '').toString();
+    final toneColor = _toneColor((report['tone_color'] ?? '').toString());
 
     return [
       Text('Generated $generatedAt',
           style: TextStyle(
               color: Brand.mint.withValues(alpha: 0.6), fontSize: 11)),
       const SizedBox(height: 10),
+      if (tone.isNotEmpty) ...[
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          decoration: BoxDecoration(
+              color: toneColor,
+              borderRadius: BorderRadius.circular(10)),
+          child: Text('OVERALL TONE: $tone',
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13)),
+        ),
+        const SizedBox(height: 14),
+      ],
       Card(
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -226,6 +244,69 @@ class _MacroReportScreenState extends State<MacroReportScreen> {
           ),
         ),
       ],
+      if (news.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('MARKET NEWS HIGHLIGHTS',
+                    style: TextStyle(
+                        color: Brand.gold,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1)),
+                const SizedBox(height: 4),
+                Text('Real recent headlines from the News tab — not AI-written.',
+                    style: TextStyle(
+                        color: Brand.mint.withValues(alpha: 0.6),
+                        fontSize: 10.5)),
+                const SizedBox(height: 10),
+                ...news.map((n) {
+                  final m = n as Map<String, dynamic>;
+                  final impact = (m['impact'] ?? '').toString();
+                  final color = _impactColor(impact);
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(top: 4, right: 8),
+                          width: 4,
+                          height: 4,
+                          decoration:
+                              BoxDecoration(color: color, shape: BoxShape.circle),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(m['title'].toString(),
+                                  style: const TextStyle(
+                                      color: Brand.paper,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13)),
+                              const SizedBox(height: 3),
+                              Text(
+                                  '${m['source'] ?? ''} · ${m['age'] ?? ''} · $impact impact',
+                                  style: TextStyle(
+                                      color: Brand.mint.withValues(alpha: 0.6),
+                                      fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+      ],
       const SizedBox(height: 14),
       Card(
         child: Padding(
@@ -299,5 +380,27 @@ class _MacroReportScreenState extends State<MacroReportScreen> {
   String _fmt(dynamic v) {
     if (v is! num) return v.toString();
     return v.toStringAsFixed(2);
+  }
+
+  Color _toneColor(String key) {
+    switch (key) {
+      case 'red':
+        return Brand.red;
+      case 'green':
+        return Brand.green;
+      default:
+        return const Color(0xFFD97706); // amber
+    }
+  }
+
+  Color _impactColor(String impact) {
+    switch (impact) {
+      case 'High':
+        return Brand.red;
+      case 'Medium':
+        return const Color(0xFFD97706); // amber
+      default:
+        return Brand.mint;
+    }
   }
 }
