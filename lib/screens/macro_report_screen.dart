@@ -1,9 +1,15 @@
 // lib/screens/macro_report_screen.dart
+//
+// FULL REPLACEMENT FILE — copy this entire file's contents over your
+// existing lib/screens/macro_report_screen.dart. It adds a per-user
+// "EMAIL ALERTS" toggle card (Daily/Weekly/Monthly) using AuthService.email;
+// everything else is unchanged from your current file.
 
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import '../main.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 
 class MacroReportScreen extends StatefulWidget {
   const MacroReportScreen({super.key});
@@ -18,6 +24,54 @@ class _MacroReportScreenState extends State<MacroReportScreen> {
   bool _generatingPdf = false;
   Map<String, dynamic>? _report;
   String? _error;
+
+  bool _daily = false, _weekly = false, _monthly = false;
+  bool _alertsLoading = true;
+  bool _alertsSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAlertSettings();
+  }
+
+  Future<void> _loadAlertSettings() async {
+    final email = AuthService.email;
+    if (email == null) {
+      setState(() => _alertsLoading = false);
+      return;
+    }
+    try {
+      final s = await ApiService.getAlertSettings(email);
+      if (mounted) {
+        setState(() {
+          _daily = s['daily'] == true;
+          _weekly = s['weekly'] == true;
+          _monthly = s['monthly'] == true;
+          _alertsLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _alertsLoading = false);
+    }
+  }
+
+  Future<void> _saveAlertSettings() async {
+    final email = AuthService.email;
+    if (email == null) return;
+    setState(() => _alertsSaving = true);
+    try {
+      await ApiService.setAlertSettings(email,
+          daily: _daily, weekly: _weekly, monthly: _monthly);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not save alert settings: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _alertsSaving = false);
+    }
+  }
 
   Future<void> _generate() async {
     setState(() {
@@ -86,6 +140,8 @@ class _MacroReportScreenState extends State<MacroReportScreen> {
               ],
             ),
             const SizedBox(height: 16),
+            _alertsCard(),
+            const SizedBox(height: 16),
             FilledButton(
               style: FilledButton.styleFrom(
                   backgroundColor: Brand.gold,
@@ -106,6 +162,77 @@ class _MacroReportScreenState extends State<MacroReportScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _alertsCard() {
+    final loggedIn = AuthService.email != null;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('EMAIL ALERTS',
+                    style: TextStyle(
+                        color: Brand.gold,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1)),
+                if (_alertsSaving) ...[
+                  const SizedBox(width: 8),
+                  const SizedBox(
+                      height: 12,
+                      width: 12,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
+                ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+                loggedIn
+                    ? 'Get this report emailed to ${AuthService.email} automatically.'
+                    : 'Log in to receive this report by email automatically.',
+                style: TextStyle(
+                    color: Brand.mint.withValues(alpha: 0.6), fontSize: 10.5)),
+            const SizedBox(height: 8),
+            if (!loggedIn)
+              const SizedBox()
+            else if (_alertsLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: LinearProgressIndicator(),
+              )
+            else ...[
+              _alertSwitch('Daily', _daily, (v) {
+                setState(() => _daily = v);
+                _saveAlertSettings();
+              }),
+              _alertSwitch('Weekly', _weekly, (v) {
+                setState(() => _weekly = v);
+                _saveAlertSettings();
+              }),
+              _alertSwitch('Monthly', _monthly, (v) {
+                setState(() => _monthly = v);
+                _saveAlertSettings();
+              }),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _alertSwitch(String label, bool value, ValueChanged<bool> onChanged) {
+    return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(label, style: const TextStyle(color: Brand.paper)),
+      value: value,
+      activeColor: Brand.gold,
+      onChanged: onChanged,
     );
   }
 

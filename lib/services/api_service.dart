@@ -1082,6 +1082,37 @@ class ApiService {
     }
     throw ApiException('Could not generate report PDF (${r.statusCode})');
   }
+
+  /// Current opt-in state for this user's Daily/Weekly/Monthly report emails.
+  static Future<Map<String, dynamic>> getAlertSettings(String email) async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/alerts/${Uri.encodeComponent(email)}'))
+        .timeout(const Duration(seconds: 30));
+    if (r.statusCode == 200) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    }
+    throw ApiException('Could not load alert settings (${r.statusCode})');
+  }
+
+  /// Save this user's opt-in state for Daily/Weekly/Monthly report emails.
+  static Future<void> setAlertSettings(
+    String email, {
+    required bool daily,
+    required bool weekly,
+    required bool monthly,
+  }) async {
+    final r = await http
+        .post(
+          Uri.parse('$baseUrl/alerts/${Uri.encodeComponent(email)}'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(
+              {'daily': daily, 'weekly': weekly, 'monthly': monthly}),
+        )
+        .timeout(const Duration(seconds: 30));
+    if (r.statusCode != 200) {
+      throw ApiException('Could not save alert settings (${r.statusCode})');
+    }
+  }
 }
 
 /// A friendly error we can show the user, rather than a raw exception.
