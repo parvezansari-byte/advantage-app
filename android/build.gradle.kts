@@ -23,17 +23,20 @@ subprojects {
 
 // Some older plugins (e.g. another_telephony) don't declare a Kotlin/Java
 // compile target matching this project's (17), which fails the build with
-// "Inconsistent JVM-target compatibility". Force every subproject,
-// including plugins, to compile against the same target as the app.
+// "Inconsistent JVM-target compatibility". Force plugin subprojects only
+// (never ":app", which already sets its own consistent Java/Kotlin 17
+// config and must not be touched here) to compile against 17 as well.
 subprojects {
-    tasks.withType<KotlinCompile>().configureEach {
-        compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    if (project.name != "app") {
+        tasks.withType<KotlinCompile>().configureEach {
+            compilerOptions {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            }
         }
-    }
-    tasks.withType<JavaCompile>().configureEach {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
+        tasks.withType<JavaCompile>().configureEach {
+            sourceCompatibility = "17"
+            targetCompatibility = "17"
+        }
     }
 }
 
