@@ -1,3 +1,4 @@
+import com.android.build.gradle.BaseExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 allprojects {
@@ -26,8 +27,20 @@ subprojects {
 // "Inconsistent JVM-target compatibility". Force plugin subprojects only
 // (never ":app", which already sets its own consistent Java/Kotlin 17
 // config and must not be touched here) to compile against 17 as well.
+//
+// This has to override the Android Gradle Plugin's own `compileOptions`
+// extension (inside afterEvaluate, once the plugin's own build script has
+// already run) rather than just the JavaCompile task property directly —
+// AGP re-derives the task's source/target compatibility from that
+// extension, so setting only the task property gets silently overwritten.
 subprojects {
     if (project.name != "app") {
+        afterEvaluate {
+            extensions.findByType(BaseExtension::class.java)?.let { androidExt ->
+                androidExt.compileOptions.sourceCompatibility = JavaVersion.VERSION_17
+                androidExt.compileOptions.targetCompatibility = JavaVersion.VERSION_17
+            }
+        }
         tasks.withType<KotlinCompile>().configureEach {
             compilerOptions {
                 jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
