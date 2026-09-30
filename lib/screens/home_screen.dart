@@ -21,6 +21,7 @@ import 'backtest_screen.dart';
 import 'portfolio_screen.dart';
 import 'tax_screen.dart';
 import 'finance_screen.dart';
+import 'sms_tracking_screen.dart';
 import '../services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -448,6 +449,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
                   Navigator.push(context,
                       MaterialPageRoute(builder: (_) => FinanceScreen(userEmail: email)));
+                },
+              ),
+              _MenuCard(
+                icon: Icons.sms_outlined,
+                iconColor: Brand.gold,
+                title: 'SMS Expense Tracking',
+                subtitle: 'Auto-log expenses from bank debit SMS (Android only)',
+                onTap: () {
+                  final email = AuthService.email;
+                  if (email == null || email.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Sign in to use SMS expense tracking')),
+                    );
+                    return;
+                  }
+                  Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => SmsTrackingScreen(userEmail: email)));
                 },
               ),
               const SizedBox(height: 24),
