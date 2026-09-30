@@ -1,4 +1,4 @@
-package com.example.research_app
+package com.wealthy.advantage
 
 import io.flutter.embedding.android.FlutterActivity
 
