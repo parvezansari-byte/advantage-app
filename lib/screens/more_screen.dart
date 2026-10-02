@@ -28,6 +28,7 @@ import 'calculator_screen.dart';
 import 'tax_screen.dart';
 import 'finance_screen.dart';
 import 'macro_report_screen.dart';
+import 'trading_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -226,6 +227,20 @@ class MoreScreen extends StatelessWidget {
               context,
               message: 'Sign in to use the finance tracker',
               builder: (email) => FinanceScreen(userEmail: email),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          const _SectionLabel('TRADING'),
+          _MenuCard(
+            icon: Icons.candlestick_chart_outlined,
+            iconColor: Brand.purple,
+            title: 'Trading (Dhan)',
+            subtitle: 'Your holdings, positions & manual orders',
+            onTap: () => _requireEmail(
+              context,
+              message: 'Sign in to use trading',
+              builder: (email) => TradingScreen(userEmail: email),
             ),
           ),
           const SizedBox(height: 18),
