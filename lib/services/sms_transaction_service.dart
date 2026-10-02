@@ -11,6 +11,7 @@
 
 import 'dart:convert';
 import 'package:another_telephony/telephony.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 
@@ -45,10 +46,37 @@ class SmsTransactionService {
     await prefs.setBool(_enabledKey, value);
   }
 
-  /// Asks for SMS permission. Returns true if granted.
+  /// Whether SMS permission is currently granted.
+  static Future<bool> hasPermission() async {
+    return Permission.sms.isGranted;
+  }
+
+  /// Whether the user has permanently denied SMS permission (checked
+  /// "Don't ask again" / denied it a second time) — Android will no longer
+  /// show the system dialog in this case, so the only way forward is the
+  /// app's own settings screen.
+  static Future<bool> isPermanentlyDenied() async {
+    return Permission.sms.isPermanentlyDenied;
+  }
+
+  /// Asks for SMS permission via the OS runtime-permission dialog. Returns
+  /// true if granted.
+  ///
+  /// Uses permission_handler rather than another_telephony's own
+  /// requestPhoneAndSmsPermissions: that method has a known issue on some
+  /// Android/plugin-registration combinations where it silently fails
+  /// ("No implementation found") and the system dialog never appears at
+  /// all, which is what was happening here. permission_handler's SMS
+  /// request is far more reliable and widely used for exactly this.
   static Future<bool> requestPermission() async {
-    final granted = await _telephony.requestPhoneAndSmsPermissions;
-    return granted ?? false;
+    final status = await Permission.sms.request();
+    return status.isGranted;
+  }
+
+  /// Opens the app's own system settings page, for when permission was
+  /// permanently denied and the OS will no longer show the request dialog.
+  static Future<void> openSettings() async {
+    await openAppSettings();
   }
 
   /// Starts listening for new incoming SMS while the app process is alive.

@@ -53,6 +53,38 @@ class _SmsTrackingScreenState extends State<SmsTrackingScreen> {
       return;
     }
     if (value) {
+      final alreadyDenied = await SmsTransactionService.isPermanentlyDenied();
+      if (alreadyDenied) {
+        if (mounted) {
+          final openSettings = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: Brand.vault,
+              title: const Text('SMS permission needed',
+                  style: TextStyle(color: Brand.paper)),
+              content: const Text(
+                'SMS permission was denied before, so Android will not show '
+                'the request popup again. Turn it on from the app\'s system '
+                'settings instead.',
+                style: TextStyle(color: Brand.mint),
+              ),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel')),
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Open settings')),
+              ],
+            ),
+          );
+          if (openSettings == true) {
+            await SmsTransactionService.openSettings();
+          }
+        }
+        return;
+      }
+
       final granted = await SmsTransactionService.requestPermission();
       if (!granted) {
         if (mounted) {
