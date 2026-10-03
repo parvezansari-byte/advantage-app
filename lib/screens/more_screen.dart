@@ -28,6 +28,7 @@ import 'tax_screen.dart';
 import 'finance_screen.dart';
 import 'macro_report_screen.dart';
 import 'trading_screen.dart';
+import 'crm_client_list_screen.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -232,6 +233,20 @@ class MoreScreen extends StatelessWidget {
               context,
               message: 'Sign in to use trading',
               builder: (email) => TradingScreen(userEmail: email),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          const _SectionLabel('CRM'),
+          _MenuCard(
+            icon: Icons.contacts_outlined,
+            iconColor: Brand.purple,
+            title: 'Clients',
+            subtitle: 'Your client book, notes & portfolio view',
+            onTap: () => _requireEmail(
+              context,
+              message: 'Sign in to use the CRM',
+              builder: (email) => CrmClientListScreen(ownerEmail: email),
             ),
           ),
           const SizedBox(height: 18),
