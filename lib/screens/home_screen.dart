@@ -14,8 +14,7 @@ import 'life_goal_screen.dart';
 import 'core_wealth_screen.dart';
 import 'news_screen.dart';
 import 'sectors_screen.dart';
-import 'chart_screen.dart';
-import 'options_screen.dart';
+import 'chart_options_screen.dart';
 import 'holdings_screen.dart';
 import 'backtest_screen.dart';
 import 'portfolio_screen.dart';
@@ -277,10 +276,11 @@ class _HomeScreenState extends State<HomeScreen> {
               _MenuCard(
                 icon: Icons.candlestick_chart,
                 iconColor: Brand.blue,
-                title: 'Live Chart',
-                subtitle: 'Intraday and long-term price charts',
+                title: 'Chart & Options',
+                subtitle: 'Live price chart and option chain, one screen',
                 onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ChartScreen())),
+                    MaterialPageRoute(
+                        builder: (_) => const ChartOptionsScreen())),
               ),
               _MenuCard(
                 icon: Icons.donut_small,
@@ -297,14 +297,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 subtitle: 'FII/DII flows and live market news',
                 onTap: () => Navigator.push(context,
                     MaterialPageRoute(builder: (_) => const NewsScreen())),
-              ),
-              _MenuCard(
-                icon: Icons.stacked_bar_chart,
-                iconColor: Brand.blue,
-                title: 'Option Chain',
-                subtitle: 'PCR, max pain and open interest by strike',
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const OptionsScreen())),
               ),
               const SizedBox(height: 18),
 
