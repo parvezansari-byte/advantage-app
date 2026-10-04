@@ -123,6 +123,8 @@ class _ChartOptionsScreenState extends State<ChartOptionsScreen>
   bool _chartLoading = true;
   String? _chartError;
   Timer? _refreshTimer;
+  bool _candleMode = false;
+  bool _showSma = false;
 
   // ---- Option chain tab state ----
   String _expiry = '';
@@ -334,10 +336,14 @@ class _ChartOptionsScreenState extends State<ChartOptionsScreen>
                   loading: _chartLoading,
                   error: _chartError,
                   hasTicker: _chartTickers.containsKey(_index),
+                  candleMode: _candleMode,
+                  showSma: _showSma,
                   onTimeframe: (t) {
                     setState(() => _timeframe = t);
                     _loadChart();
                   },
+                  onCandleModeChanged: (v) => setState(() => _candleMode = v),
+                  onShowSmaChanged: (v) => setState(() => _showSma = v),
                   onRetry: () => _loadChart(),
                 ),
                 _OptionsTab(
@@ -378,7 +384,11 @@ class _ChartTab extends StatelessWidget {
     required this.loading,
     required this.error,
     required this.hasTicker,
+    required this.candleMode,
+    required this.showSma,
     required this.onTimeframe,
+    required this.onCandleModeChanged,
+    required this.onShowSmaChanged,
     required this.onRetry,
   });
 
@@ -389,7 +399,11 @@ class _ChartTab extends StatelessWidget {
   final bool loading;
   final String? error;
   final bool hasTicker;
+  final bool candleMode;
+  final bool showSma;
   final ValueChanged<String> onTimeframe;
+  final ValueChanged<bool> onCandleModeChanged;
+  final ValueChanged<bool> onShowSmaChanged;
   final VoidCallback onRetry;
 
   @override
@@ -470,7 +484,34 @@ class _ChartTab extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
+
+        // ---- Chart style: line vs. candlesticks, plus SMA(20) overlay ----
+        Row(
+          children: [
+            _StyleChip(
+              label: 'Line',
+              selected: !candleMode,
+              accent: accent,
+              onTap: () => onCandleModeChanged(false),
+            ),
+            const SizedBox(width: 6),
+            _StyleChip(
+              label: 'Candles',
+              selected: candleMode,
+              accent: accent,
+              onTap: () => onCandleModeChanged(true),
+            ),
+            const Spacer(),
+            _StyleChip(
+              label: 'SMA 20',
+              selected: showSma,
+              accent: Brand.gold,
+              onTap: () => onShowSmaChanged(!showSma),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
 
         if (loading)
           const Padding(
@@ -482,7 +523,8 @@ class _ChartTab extends StatelessWidget {
         else if (d != null) ...[
           _PriceHeader(data: d, accent: accent),
           const SizedBox(height: 16),
-          _ChartCanvas(data: d, accent: accent),
+          _ChartCanvas(
+              data: d, accent: accent, candleMode: candleMode, showSma: showSma),
           const SizedBox(height: 16),
           _StatsRow(data: d),
           const SizedBox(height: 14),
@@ -499,6 +541,42 @@ class _ChartTab extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _StyleChip extends StatelessWidget {
+  const _StyleChip({
+    required this.label,
+    required this.selected,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? accent.withValues(alpha: 0.18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(
+            color: selected ? accent.withValues(alpha: 0.7) : Brand.mint.withValues(alpha: 0.18),
+          ),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                color: selected ? accent : Brand.mint,
+                fontSize: 10.5,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+      ),
     );
   }
 }
@@ -583,11 +661,31 @@ class _PriceHeader extends StatelessWidget {
   }
 }
 
+/// Simple moving average over the closes, same length as the series
+/// (leading entries before there are [period] points are null).
+List<double?> _sma(List<double> closes, int period) {
+  final out = List<double?>.filled(closes.length, null);
+  double sum = 0;
+  for (var i = 0; i < closes.length; i++) {
+    sum += closes[i];
+    if (i >= period) sum -= closes[i - period];
+    if (i >= period - 1) out[i] = sum / period;
+  }
+  return out;
+}
+
 class _ChartCanvas extends StatefulWidget {
-  const _ChartCanvas({required this.data, required this.accent});
+  const _ChartCanvas({
+    required this.data,
+    required this.accent,
+    this.candleMode = false,
+    this.showSma = false,
+  });
 
   final Map<String, dynamic> data;
   final Color accent;
+  final bool candleMode;
+  final bool showSma;
 
   @override
   State<_ChartCanvas> createState() => _ChartCanvasState();
@@ -616,21 +714,42 @@ class _ChartCanvasState extends State<_ChartCanvas> {
     final values = [
       for (final p in series) ((p['close'] as num?) ?? 0).toDouble()
     ];
+    final opens = [
+      for (final p in series) ((p['open'] as num?) ?? p['close'] as num? ?? 0).toDouble()
+    ];
+    final highs = [
+      for (final p in series) ((p['high'] as num?) ?? p['close'] as num? ?? 0).toDouble()
+    ];
+    final lows = [
+      for (final p in series) ((p['low'] as num?) ?? p['close'] as num? ?? 0).toDouble()
+    ];
     final baseline = (widget.data['baseline'] as num?)?.toDouble();
+    final sma = widget.showSma ? _sma(values, 20) : null;
+
+    final t = _touchIndex;
+    String touchLabel;
+    if (t == null) {
+      touchLabel = '';
+    } else if (widget.candleMode) {
+      touchLabel = '${series[t]['label']}   '
+          'O ${_price(opens[t])}  H ${_price(highs[t])}  '
+          'L ${_price(lows[t])}  C ${_price(values[t])}';
+    } else {
+      touchLabel = '${series[t]['label']}   ₹${_price(values[t])}';
+    }
 
     return Column(
       children: [
         SizedBox(
           height: 22,
-          child: _touchIndex == null
+          child: t == null
               ? const SizedBox.shrink()
               : Center(
                   child: Text(
-                    '${series[_touchIndex!]['label']}   '
-                    '₹${_price(series[_touchIndex!]['close'] as num?)}',
+                    touchLabel,
                     style: const TextStyle(
                         color: Brand.gold,
-                        fontSize: 12,
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -664,12 +783,23 @@ class _ChartCanvasState extends State<_ChartCanvas> {
             ),
             child: CustomPaint(
               size: Size.infinite,
-              painter: _LinePainter(
-                values: values,
-                accent: widget.accent,
-                baseline: baseline,
-                touchIndex: _touchIndex,
-              ),
+              painter: widget.candleMode
+                  ? _CandlePainter(
+                      opens: opens,
+                      highs: highs,
+                      lows: lows,
+                      closes: values,
+                      sma: sma,
+                      baseline: baseline,
+                      touchIndex: _touchIndex,
+                    )
+                  : _LinePainter(
+                      values: values,
+                      accent: widget.accent,
+                      baseline: baseline,
+                      sma: sma,
+                      touchIndex: _touchIndex,
+                    ),
             ),
           ),
         ),
@@ -695,12 +825,14 @@ class _LinePainter extends CustomPainter {
     required this.values,
     required this.accent,
     this.baseline,
+    this.sma,
     this.touchIndex,
   });
 
   final List<double> values;
   final Color accent;
   final double? baseline;
+  final List<double?>? sma;
   final int? touchIndex;
 
   @override
@@ -712,6 +844,14 @@ class _LinePainter extends CustomPainter {
     if (baseline != null) {
       lo = math.min(lo, baseline!);
       hi = math.max(hi, baseline!);
+    }
+    final smaVals = sma;
+    if (smaVals != null) {
+      for (final v in smaVals) {
+        if (v == null) continue;
+        lo = math.min(lo, v);
+        hi = math.max(hi, v);
+      }
     }
     final pad = (hi - lo) * 0.08;
     lo -= pad == 0 ? hi * 0.002 : pad;
@@ -773,6 +913,32 @@ class _LinePainter extends CustomPainter {
     canvas.drawCircle(
         last, 8, Paint()..color = accent.withValues(alpha: 0.25));
 
+    if (smaVals != null) {
+      Path? smaPath;
+      for (var i = 0; i < smaVals.length; i++) {
+        final v = smaVals[i];
+        if (v == null) continue;
+        final p = Offset(
+            size.width * i / (values.length - 1),
+            size.height - ((v - lo) / span) * size.height);
+        if (smaPath == null) {
+          smaPath = Path()..moveTo(p.dx, p.dy);
+        } else {
+          smaPath.lineTo(p.dx, p.dy);
+        }
+      }
+      if (smaPath != null) {
+        canvas.drawPath(
+          smaPath,
+          Paint()
+            ..color = Brand.gold
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.4
+            ..strokeJoin = StrokeJoin.round,
+        );
+      }
+    }
+
     if (touchIndex != null &&
         touchIndex! >= 0 &&
         touchIndex! < values.length) {
@@ -792,7 +958,141 @@ class _LinePainter extends CustomPainter {
   bool shouldRepaint(covariant _LinePainter old) =>
       old.values != values ||
       old.touchIndex != touchIndex ||
-      old.accent != accent;
+      old.accent != accent ||
+      old.sma != sma;
+}
+
+// ===========================================================================
+// CANDLESTICK PAINTER
+// ===========================================================================
+//
+// Each bar from the API becomes one candle: a thin "wick" line spanning the
+// bar's high→low, and a filled "body" rectangle spanning open→close. Green
+// body = close finished above open (bullish bar); red body = close finished
+// below open (bearish bar). This is the standard way traders read price
+// action bar-by-bar, as opposed to a line chart which only shows the close.
+class _CandlePainter extends CustomPainter {
+  _CandlePainter({
+    required this.opens,
+    required this.highs,
+    required this.lows,
+    required this.closes,
+    this.sma,
+    this.baseline,
+    this.touchIndex,
+  });
+
+  final List<double> opens;
+  final List<double> highs;
+  final List<double> lows;
+  final List<double> closes;
+  final List<double?>? sma;
+  final double? baseline;
+  final int? touchIndex;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = closes.length;
+    if (n < 2) return;
+
+    var lo = lows.reduce(math.min);
+    var hi = highs.reduce(math.max);
+    if (baseline != null) {
+      lo = math.min(lo, baseline!);
+      hi = math.max(hi, baseline!);
+    }
+    final smaVals = sma;
+    if (smaVals != null) {
+      for (final v in smaVals) {
+        if (v == null) continue;
+        lo = math.min(lo, v);
+        hi = math.max(hi, v);
+      }
+    }
+    final pad = (hi - lo) * 0.08;
+    lo -= pad == 0 ? hi * 0.002 : pad;
+    hi += pad == 0 ? hi * 0.002 : pad;
+    final span = (hi - lo).abs() < 1e-9 ? 1.0 : hi - lo;
+
+    double y(double v) => size.height - ((v - lo) / span) * size.height;
+    final slot = size.width / n;
+    final bodyW = math.max(slot * 0.55, 1.5);
+
+    if (baseline != null) {
+      final by = y(baseline!);
+      final paint = Paint()
+        ..color = Brand.mint.withValues(alpha: 0.4)
+        ..strokeWidth = 1;
+      const dash = 5.0, gap = 4.0;
+      var x = 0.0;
+      while (x < size.width) {
+        canvas.drawLine(
+            Offset(x, by), Offset(math.min(x + dash, size.width), by), paint);
+        x += dash + gap;
+      }
+    }
+
+    for (var i = 0; i < n; i++) {
+      final centre = slot * i + slot / 2;
+      final up = closes[i] >= opens[i];
+      final colour = up ? Brand.green : Brand.red;
+      final wickPaint = Paint()
+        ..color = colour
+        ..strokeWidth = 1.2;
+
+      canvas.drawLine(
+          Offset(centre, y(highs[i])), Offset(centre, y(lows[i])), wickPaint);
+
+      final bodyTop = y(math.max(opens[i], closes[i]));
+      final bodyBottom = y(math.min(opens[i], closes[i]));
+      final rect = Rect.fromLTRB(
+          centre - bodyW / 2, bodyTop, centre + bodyW / 2,
+          math.max(bodyBottom, bodyTop + 1));
+      canvas.drawRect(rect, Paint()..color = colour);
+    }
+
+    if (smaVals != null) {
+      Path? smaPath;
+      for (var i = 0; i < smaVals.length; i++) {
+        final v = smaVals[i];
+        if (v == null) continue;
+        final p = Offset(slot * i + slot / 2, y(v));
+        if (smaPath == null) {
+          smaPath = Path()..moveTo(p.dx, p.dy);
+        } else {
+          smaPath.lineTo(p.dx, p.dy);
+        }
+      }
+      if (smaPath != null) {
+        canvas.drawPath(
+          smaPath,
+          Paint()
+            ..color = Brand.gold
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.4
+            ..strokeJoin = StrokeJoin.round,
+        );
+      }
+    }
+
+    final t = touchIndex;
+    if (t != null && t >= 0 && t < n) {
+      final x = slot * t + slot / 2;
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        Paint()
+          ..color = Brand.gold.withValues(alpha: 0.5)
+          ..strokeWidth = 1,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CandlePainter old) =>
+      old.closes != closes ||
+      old.touchIndex != touchIndex ||
+      old.sma != sma;
 }
 
 class _StatsRow extends StatelessWidget {
