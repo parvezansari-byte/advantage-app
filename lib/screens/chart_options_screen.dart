@@ -125,6 +125,7 @@ class _ChartOptionsScreenState extends State<ChartOptionsScreen>
   Timer? _refreshTimer;
   bool _candleMode = false;
   bool _showSma = false;
+  bool _showVwap = false;
 
   // ---- Option chain tab state ----
   String _expiry = '';
@@ -338,12 +339,14 @@ class _ChartOptionsScreenState extends State<ChartOptionsScreen>
                   hasTicker: _chartTickers.containsKey(_index),
                   candleMode: _candleMode,
                   showSma: _showSma,
+                  showVwap: _showVwap,
                   onTimeframe: (t) {
                     setState(() => _timeframe = t);
                     _loadChart();
                   },
                   onCandleModeChanged: (v) => setState(() => _candleMode = v),
                   onShowSmaChanged: (v) => setState(() => _showSma = v),
+                  onShowVwapChanged: (v) => setState(() => _showVwap = v),
                   onRetry: () => _loadChart(),
                 ),
                 _OptionsTab(
@@ -386,9 +389,11 @@ class _ChartTab extends StatelessWidget {
     required this.hasTicker,
     required this.candleMode,
     required this.showSma,
+    required this.showVwap,
     required this.onTimeframe,
     required this.onCandleModeChanged,
     required this.onShowSmaChanged,
+    required this.onShowVwapChanged,
     required this.onRetry,
   });
 
@@ -401,9 +406,11 @@ class _ChartTab extends StatelessWidget {
   final bool hasTicker;
   final bool candleMode;
   final bool showSma;
+  final bool showVwap;
   final ValueChanged<String> onTimeframe;
   final ValueChanged<bool> onCandleModeChanged;
   final ValueChanged<bool> onShowSmaChanged;
+  final ValueChanged<bool> onShowVwapChanged;
   final VoidCallback onRetry;
 
   @override
@@ -503,6 +510,15 @@ class _ChartTab extends StatelessWidget {
               onTap: () => onCandleModeChanged(true),
             ),
             const Spacer(),
+            if (d?['has_vwap'] == true) ...[
+              _StyleChip(
+                label: d?['vwap_uses_volume'] == false ? 'Session avg' : 'VWAP',
+                selected: showVwap,
+                accent: Brand.blue,
+                onTap: () => onShowVwapChanged(!showVwap),
+              ),
+              const SizedBox(width: 6),
+            ],
             _StyleChip(
               label: 'SMA 20',
               selected: showSma,
@@ -524,7 +540,11 @@ class _ChartTab extends StatelessWidget {
           _PriceHeader(data: d, accent: accent),
           const SizedBox(height: 16),
           _ChartCanvas(
-              data: d, accent: accent, candleMode: candleMode, showSma: showSma),
+              data: d,
+              accent: accent,
+              candleMode: candleMode,
+              showSma: showSma,
+              showVwap: showVwap),
           const SizedBox(height: 16),
           _StatsRow(data: d),
           const SizedBox(height: 14),
@@ -661,6 +681,37 @@ class _PriceHeader extends StatelessWidget {
   }
 }
 
+/// Draws one overlay line (VWAP etc). Gaps (null values) break the line.
+void _drawOverlay(
+  Canvas canvas,
+  List<double?> vals,
+  Color colour,
+  double Function(int) x,
+  double Function(double) y,
+) {
+  final paint = Paint()
+    ..color = colour
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.6
+    ..strokeJoin = StrokeJoin.round;
+  Path? path;
+  for (var i = 0; i < vals.length; i++) {
+    final v = vals[i];
+    if (v == null) {
+      if (path != null) canvas.drawPath(path, paint);
+      path = null;
+      continue;
+    }
+    final px = x(i), py = y(v);
+    if (path == null) {
+      path = Path()..moveTo(px, py);
+    } else {
+      path.lineTo(px, py);
+    }
+  }
+  if (path != null) canvas.drawPath(path, paint);
+}
+
 /// Simple moving average over the closes, same length as the series
 /// (leading entries before there are [period] points are null).
 List<double?> _sma(List<double> closes, int period) {
@@ -680,12 +731,14 @@ class _ChartCanvas extends StatefulWidget {
     required this.accent,
     this.candleMode = false,
     this.showSma = false,
+    this.showVwap = false,
   });
 
   final Map<String, dynamic> data;
   final Color accent;
   final bool candleMode;
   final bool showSma;
+  final bool showVwap;
 
   @override
   State<_ChartCanvas> createState() => _ChartCanvasState();
@@ -725,6 +778,9 @@ class _ChartCanvasState extends State<_ChartCanvas> {
     ];
     final baseline = (widget.data['baseline'] as num?)?.toDouble();
     final sma = widget.showSma ? _sma(values, 20) : null;
+    final vwap = widget.showVwap
+        ? <double?>[for (final p in series) (p['vwap'] as num?)?.toDouble()]
+        : null;
 
     final t = _touchIndex;
     String touchLabel;
@@ -790,6 +846,7 @@ class _ChartCanvasState extends State<_ChartCanvas> {
                       lows: lows,
                       closes: values,
                       sma: sma,
+                      vwap: vwap,
                       baseline: baseline,
                       touchIndex: _touchIndex,
                     )
@@ -798,6 +855,7 @@ class _ChartCanvasState extends State<_ChartCanvas> {
                       accent: widget.accent,
                       baseline: baseline,
                       sma: sma,
+                      vwap: vwap,
                       touchIndex: _touchIndex,
                     ),
             ),
@@ -826,6 +884,7 @@ class _LinePainter extends CustomPainter {
     required this.accent,
     this.baseline,
     this.sma,
+    this.vwap,
     this.touchIndex,
   });
 
@@ -833,6 +892,7 @@ class _LinePainter extends CustomPainter {
   final Color accent;
   final double? baseline;
   final List<double?>? sma;
+  final List<double?>? vwap;
   final int? touchIndex;
 
   @override
@@ -848,6 +908,14 @@ class _LinePainter extends CustomPainter {
     final smaVals = sma;
     if (smaVals != null) {
       for (final v in smaVals) {
+        if (v == null) continue;
+        lo = math.min(lo, v);
+        hi = math.max(hi, v);
+      }
+    }
+    final vwapVals = vwap;
+    if (vwapVals != null) {
+      for (final v in vwapVals) {
         if (v == null) continue;
         lo = math.min(lo, v);
         hi = math.max(hi, v);
@@ -939,6 +1007,16 @@ class _LinePainter extends CustomPainter {
       }
     }
 
+    if (vwapVals != null) {
+      _drawOverlay(
+        canvas,
+        vwapVals,
+        Brand.blue,
+        (i) => size.width * i / (values.length - 1),
+        (v) => size.height - ((v - lo) / span) * size.height,
+      );
+    }
+
     if (touchIndex != null &&
         touchIndex! >= 0 &&
         touchIndex! < values.length) {
@@ -959,7 +1037,8 @@ class _LinePainter extends CustomPainter {
       old.values != values ||
       old.touchIndex != touchIndex ||
       old.accent != accent ||
-      old.sma != sma;
+      old.sma != sma ||
+      old.vwap != vwap;
 }
 
 // ===========================================================================
@@ -978,6 +1057,7 @@ class _CandlePainter extends CustomPainter {
     required this.lows,
     required this.closes,
     this.sma,
+    this.vwap,
     this.baseline,
     this.touchIndex,
   });
@@ -987,6 +1067,7 @@ class _CandlePainter extends CustomPainter {
   final List<double> lows;
   final List<double> closes;
   final List<double?>? sma;
+  final List<double?>? vwap;
   final double? baseline;
   final int? touchIndex;
 
@@ -1004,6 +1085,14 @@ class _CandlePainter extends CustomPainter {
     final smaVals = sma;
     if (smaVals != null) {
       for (final v in smaVals) {
+        if (v == null) continue;
+        lo = math.min(lo, v);
+        hi = math.max(hi, v);
+      }
+    }
+    final vwapVals = vwap;
+    if (vwapVals != null) {
+      for (final v in vwapVals) {
         if (v == null) continue;
         lo = math.min(lo, v);
         hi = math.max(hi, v);
@@ -1075,6 +1164,16 @@ class _CandlePainter extends CustomPainter {
       }
     }
 
+    if (vwapVals != null) {
+      _drawOverlay(
+        canvas,
+        vwapVals,
+        Brand.blue,
+        (i) => slot * i + slot / 2,
+        y,
+      );
+    }
+
     final t = touchIndex;
     if (t != null && t >= 0 && t < n) {
       final x = slot * t + slot / 2;
@@ -1092,7 +1191,8 @@ class _CandlePainter extends CustomPainter {
   bool shouldRepaint(covariant _CandlePainter old) =>
       old.closes != closes ||
       old.touchIndex != touchIndex ||
-      old.sma != sma;
+      old.sma != sma ||
+      old.vwap != vwap;
 }
 
 class _StatsRow extends StatelessWidget {
