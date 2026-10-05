@@ -29,6 +29,12 @@ import 'finance_screen.dart';
 import 'macro_report_screen.dart';
 import 'trading_screen.dart';
 import 'crm_client_list_screen.dart';
+import 'signal_screen.dart';
+
+/// Signals is a personal tool restricted server-side to this one email —
+/// the menu card only shows up for that account, same email the backend
+/// checks in /signals/{index}. Keep the two in sync if this ever changes.
+const _signalOwnerEmail = 'parvez.ansari@wealthy.in';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -236,6 +242,23 @@ class MoreScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
+
+          if (AuthService.email?.trim().toLowerCase() ==
+              _signalOwnerEmail) ...[
+            const _SectionLabel('SIGNALS'),
+            _MenuCard(
+              icon: Icons.insights_outlined,
+              iconColor: Brand.gold,
+              title: 'Nifty Signals',
+              subtitle: 'VWAP / RSI / PCR composite lean — personal, not a guarantee',
+              onTap: () => _requireEmail(
+                context,
+                message: 'Sign in to use signals',
+                builder: (email) => const SignalScreen(),
+              ),
+            ),
+            const SizedBox(height: 18),
+          ],
 
           const _SectionLabel('CRM'),
           _MenuCard(

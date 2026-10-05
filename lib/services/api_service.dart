@@ -502,6 +502,36 @@ class ApiService {
     throw ApiException(_optionError(r));
   }
 
+  // =========================================================================
+  // SIGNALS (personal use only — server restricts this to the owner email)
+  // =========================================================================
+
+  /// Composite technical + positioning reading for one index (VWAP, RSI,
+  /// SMA crossover, PCR, spot vs max pain). Not a win-rate prediction — see
+  /// the "disclaimer" field in the response. The backend only serves this
+  /// to [ownerEmail] values it recognizes; anyone else gets a 403.
+  static Future<Map<String, dynamic>> getSignal(
+    String index,
+    String ownerEmail, {
+    int strikes = 10,
+  }) async {
+    final encoded = Uri.encodeComponent(index);
+    final r = await http
+        .get(Uri.parse('$baseUrl/signals/$encoded').replace(queryParameters: {
+          'owner_email': ownerEmail,
+          'strikes': '$strikes',
+        }))
+        .timeout(const Duration(seconds: 40));
+
+    if (r.statusCode == 200) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    }
+    if (r.statusCode == 403) {
+      throw ApiException('Signals are restricted to the account owner.');
+    }
+    throw ApiException(_optionError(r));
+  }
+
   /// Surfaces Dhan's own message where there is one — an expired token or a
   /// missing Data API subscription both need user action, not a retry.
   static String _optionError(http.Response r) {
