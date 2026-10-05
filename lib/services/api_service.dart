@@ -532,6 +532,32 @@ class ApiService {
     throw ApiException(_optionError(r));
   }
 
+  /// Replays the price-based signal rules on ~60 days of 15-minute bars and
+  /// returns win rate, drawdown etc. Owner-only, like [getSignal]. Can take
+  /// several seconds because the server downloads the history first.
+  static Future<Map<String, dynamic>> getSignalBacktest(
+    String index,
+    String ownerEmail, {
+    int horizon = 4,
+  }) async {
+    final encoded = Uri.encodeComponent(index);
+    final r = await http
+        .get(Uri.parse('$baseUrl/signals/$encoded/backtest')
+            .replace(queryParameters: {
+          'owner_email': ownerEmail,
+          'horizon': '$horizon',
+        }))
+        .timeout(const Duration(seconds: 60));
+
+    if (r.statusCode == 200) {
+      return jsonDecode(r.body) as Map<String, dynamic>;
+    }
+    if (r.statusCode == 403) {
+      throw ApiException('Signals are restricted to the account owner.');
+    }
+    throw ApiException(_optionError(r));
+  }
+
   /// Surfaces Dhan's own message where there is one — an expired token or a
   /// missing Data API subscription both need user action, not a retry.
   static String _optionError(http.Response r) {

@@ -32,6 +32,10 @@ class _SignalScreenState extends State<SignalScreen> {
   String? _error;
   Timer? _timer;
 
+  Map<String, dynamic>? _bt;
+  bool _btLoading = false;
+  String? _btError;
+
   @override
   void initState() {
     super.initState();
@@ -79,8 +83,27 @@ class _SignalScreenState extends State<SignalScreen> {
     setState(() {
       _index = i;
       _data = null;
+      _bt = null;
+      _btError = null;
     });
     _load();
+  }
+
+  Future<void> _runBacktest() async {
+    final email = AuthService.email;
+    if (email == null || email.isEmpty) return;
+    setState(() {
+      _btLoading = true;
+      _btError = null;
+    });
+    try {
+      final r = await ApiService.getSignalBacktest(_index, email);
+      if (mounted) setState(() => _bt = r);
+    } catch (e) {
+      if (mounted) setState(() => _btError = '$e');
+    } finally {
+      if (mounted) setState(() => _btLoading = false);
+    }
   }
 
   Color _leanColor(String lean) {
@@ -263,6 +286,13 @@ class _SignalScreenState extends State<SignalScreen> {
                         fontSize: 10.5,
                         height: 1.45)),
               ),
+              const SizedBox(height: 14),
+              _BacktestCard(
+                data: _bt,
+                loading: _btLoading,
+                error: _btError,
+                onRun: _runBacktest,
+              ),
               const SizedBox(height: 8),
               Text(
                 'Refreshes every 30 seconds while this screen is open.',
@@ -312,6 +342,145 @@ class _ReadingTile extends StatelessWidget {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BacktestCard extends StatelessWidget {
+  const _BacktestCard({
+    required this.data,
+    required this.loading,
+    required this.error,
+    required this.onRun,
+  });
+
+  final Map<String, dynamic>? data;
+  final bool loading;
+  final String? error;
+  final VoidCallback onRun;
+
+  String _pct(dynamic v, {int dp = 1}) =>
+      v == null ? '—' : '${(v as num).toStringAsFixed(dp)}%';
+
+  @override
+  Widget build(BuildContext context) {
+    final d = data;
+    final trades = (d?['trades'] as num?)?.toInt() ?? 0;
+
+    Widget stat(String label, String value, Color colour) => Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            decoration: BoxDecoration(
+              color: Brand.fern.withValues(alpha: 0.28),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(
+              children: [
+                Text(label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: Brand.mint.withValues(alpha: 0.7),
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                FittedBox(
+                  child: Text(value,
+                      style: TextStyle(
+                          color: colour,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        );
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Brand.fern.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Brand.mint.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history, color: Brand.gold, size: 18),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('Backtest the rules',
+                    style: TextStyle(
+                        color: Brand.paper,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.bold)),
+              ),
+              if (loading)
+                const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Brand.gold))
+              else
+                TextButton(
+                  onPressed: onRun,
+                  child: Text(d == null ? 'Run' : 'Re-run',
+                      style: const TextStyle(color: Brand.gold)),
+                ),
+            ],
+          ),
+          if (d == null && error == null && !loading)
+            Text(
+              'Replays VWAP + RSI + SMA rules on the last ~60 days of '
+              '15-minute bars to show how often they were actually right.',
+              style: TextStyle(
+                  color: Brand.mint.withValues(alpha: 0.7),
+                  fontSize: 11,
+                  height: 1.4),
+            ),
+          if (error != null)
+            Text(error!, style: const TextStyle(color: Brand.red, fontSize: 11.5)),
+          if (d != null && trades == 0)
+            Text('${d['note'] ?? 'No signals fired in this period.'}',
+                style: TextStyle(
+                    color: Brand.mint.withValues(alpha: 0.8), fontSize: 11.5)),
+          if (d != null && trades > 0) ...[
+            const SizedBox(height: 10),
+            Row(children: [
+              stat('TRADES', '$trades', Brand.paper),
+              stat('WIN RATE', _pct(d['win_rate_pct']),
+                  ((d['win_rate_pct'] as num?) ?? 0) >= 55 ? Brand.green : Brand.gold),
+              stat('AVG / TRADE', _pct(d['avg_return_pct'], dp: 3),
+                  ((d['avg_return_pct'] as num?) ?? 0) > 0 ? Brand.green : Brand.red),
+            ]),
+            const SizedBox(height: 6),
+            Row(children: [
+              stat('MARKET ROSE', _pct(d['baseline_up_pct']), Brand.mint),
+              stat('MAX DRAWDOWN', _pct(d['max_drawdown_pct'], dp: 2), Brand.red),
+              stat('WORST STREAK', '${d['worst_losing_streak']} losses', Brand.red),
+            ]),
+            const SizedBox(height: 10),
+            Text(
+              'Longs: ${_pct(d['long_win_rate_pct'])} of ${d['long_trades']}  ·  '
+              'Shorts: ${_pct(d['short_win_rate_pct'])} of ${d['short_trades']}  ·  '
+              'held ${d['horizon_minutes']} min  ·  '
+              '${d['period_start']} to ${d['period_end']}',
+              style: TextStyle(
+                  color: Brand.mint.withValues(alpha: 0.75),
+                  fontSize: 10.5,
+                  height: 1.4),
+            ),
+            const SizedBox(height: 8),
+            Text('${d['caveats']}',
+                style: TextStyle(
+                    color: Brand.mint.withValues(alpha: 0.5),
+                    fontSize: 10,
+                    height: 1.4)),
+          ],
         ],
       ),
     );
