@@ -124,8 +124,8 @@ class _ChartOptionsScreenState extends State<ChartOptionsScreen>
   String? _chartError;
   Timer? _refreshTimer;
   bool _candleMode = false;
-  bool _showSma = false;
-  bool _showVwap = false;
+  // Indicators switched on: sma, vwap, bb, rsi, macd.
+  final Set<String> _indicators = {};
 
   // ---- Option chain tab state ----
   String _expiry = '';
@@ -338,15 +338,15 @@ class _ChartOptionsScreenState extends State<ChartOptionsScreen>
                   error: _chartError,
                   hasTicker: _chartTickers.containsKey(_index),
                   candleMode: _candleMode,
-                  showSma: _showSma,
-                  showVwap: _showVwap,
+                  indicators: _indicators,
                   onTimeframe: (t) {
                     setState(() => _timeframe = t);
                     _loadChart();
                   },
                   onCandleModeChanged: (v) => setState(() => _candleMode = v),
-                  onShowSmaChanged: (v) => setState(() => _showSma = v),
-                  onShowVwapChanged: (v) => setState(() => _showVwap = v),
+                  onToggleIndicator: (k) => setState(() {
+                    if (!_indicators.remove(k)) _indicators.add(k);
+                  }),
                   onRetry: () => _loadChart(),
                 ),
                 _OptionsTab(
@@ -388,12 +388,10 @@ class _ChartTab extends StatelessWidget {
     required this.error,
     required this.hasTicker,
     required this.candleMode,
-    required this.showSma,
-    required this.showVwap,
+    required this.indicators,
     required this.onTimeframe,
     required this.onCandleModeChanged,
-    required this.onShowSmaChanged,
-    required this.onShowVwapChanged,
+    required this.onToggleIndicator,
     required this.onRetry,
   });
 
@@ -405,12 +403,10 @@ class _ChartTab extends StatelessWidget {
   final String? error;
   final bool hasTicker;
   final bool candleMode;
-  final bool showSma;
-  final bool showVwap;
+  final Set<String> indicators;
   final ValueChanged<String> onTimeframe;
   final ValueChanged<bool> onCandleModeChanged;
-  final ValueChanged<bool> onShowSmaChanged;
-  final ValueChanged<bool> onShowVwapChanged;
+  final ValueChanged<String> onToggleIndicator;
   final VoidCallback onRetry;
 
   @override
@@ -449,6 +445,18 @@ class _ChartTab extends StatelessWidget {
     final d = data;
     final up = ((d?['change'] as num?) ?? 0) >= 0;
     final accent = d == null ? Brand.gold : (up ? Brand.green : Brand.red);
+
+    Widget ind(String label, String key, Color colour) => Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: Center(
+            child: _StyleChip(
+              label: label,
+              selected: indicators.contains(key),
+              accent: colour,
+              onTap: () => onToggleIndicator(key),
+            ),
+          ),
+        );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 28),
@@ -493,7 +501,7 @@ class _ChartTab extends StatelessWidget {
         ),
         const SizedBox(height: 10),
 
-        // ---- Chart style: line vs. candlesticks, plus SMA(20) overlay ----
+        // ---- Chart style: line vs. candlesticks ----
         Row(
           children: [
             _StyleChip(
@@ -509,23 +517,25 @@ class _ChartTab extends StatelessWidget {
               accent: accent,
               onTap: () => onCandleModeChanged(true),
             ),
-            const Spacer(),
-            if (d?['has_vwap'] == true) ...[
-              _StyleChip(
-                label: d?['vwap_uses_volume'] == false ? 'Session avg' : 'VWAP',
-                selected: showVwap,
-                accent: Brand.blue,
-                onTap: () => onShowVwapChanged(!showVwap),
-              ),
-              const SizedBox(width: 6),
-            ],
-            _StyleChip(
-              label: 'SMA 20',
-              selected: showSma,
-              accent: Brand.gold,
-              onTap: () => onShowSmaChanged(!showSma),
-            ),
           ],
+        ),
+        const SizedBox(height: 8),
+
+        // ---- Indicators (overlays on the price, and RSI / MACD panels) ----
+        SizedBox(
+          height: 32,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              if (d?['has_vwap'] == true)
+                ind(d?['vwap_uses_volume'] == false ? 'Session avg' : 'VWAP',
+                    'vwap', Brand.blue),
+              ind('SMA 20', 'sma', Brand.gold),
+              ind('Bollinger', 'bb', Brand.purple),
+              ind('RSI 14', 'rsi', Brand.teal),
+              ind('MACD', 'macd', Brand.green),
+            ],
+          ),
         ),
         const SizedBox(height: 12),
 
@@ -543,8 +553,7 @@ class _ChartTab extends StatelessWidget {
               data: d,
               accent: accent,
               candleMode: candleMode,
-              showSma: showSma,
-              showVwap: showVwap),
+              indicators: indicators),
           const SizedBox(height: 16),
           _StatsRow(data: d),
           const SizedBox(height: 14),
@@ -687,12 +696,13 @@ void _drawOverlay(
   List<double?> vals,
   Color colour,
   double Function(int) x,
-  double Function(double) y,
-) {
+  double Function(double) y, {
+  double width = 1.6,
+}) {
   final paint = Paint()
     ..color = colour
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.6
+    ..strokeWidth = width
     ..strokeJoin = StrokeJoin.round;
   Path? path;
   for (var i = 0; i < vals.length; i++) {
@@ -712,6 +722,33 @@ void _drawOverlay(
   if (path != null) canvas.drawPath(path, paint);
 }
 
+/// Shaded band between two lines (Bollinger Bands), plus a thin outline.
+void _drawBand(
+  Canvas canvas,
+  List<double?> upper,
+  List<double?> lower,
+  Color colour,
+  double Function(int) x,
+  double Function(double) y,
+) {
+  final idx = <int>[];
+  for (var i = 0; i < upper.length; i++) {
+    if (upper[i] != null && lower[i] != null) idx.add(i);
+  }
+  if (idx.length < 2) return;
+  final fill = Path()..moveTo(x(idx.first), y(upper[idx.first]!));
+  for (final i in idx) {
+    fill.lineTo(x(i), y(upper[i]!));
+  }
+  for (final i in idx.reversed) {
+    fill.lineTo(x(i), y(lower[i]!));
+  }
+  fill.close();
+  canvas.drawPath(fill, Paint()..color = colour.withValues(alpha: 0.10));
+  _drawOverlay(canvas, upper, colour.withValues(alpha: 0.75), x, y, width: 1.0);
+  _drawOverlay(canvas, lower, colour.withValues(alpha: 0.75), x, y, width: 1.0);
+}
+
 /// Simple moving average over the closes, same length as the series
 /// (leading entries before there are [period] points are null).
 List<double?> _sma(List<double> closes, int period) {
@@ -725,27 +762,171 @@ List<double?> _sma(List<double> closes, int period) {
   return out;
 }
 
+/// Exponential moving average, seeded with the first value (the same
+/// convention as pandas ewm(span: period, adjust: false)).
+List<double> _ema(List<double> v, int period) {
+  final out = List<double>.filled(v.length, 0);
+  if (v.isEmpty) return out;
+  final k = 2 / (period + 1);
+  out[0] = v[0];
+  for (var i = 1; i < v.length; i++) {
+    out[i] = v[i] * k + out[i - 1] * (1 - k);
+  }
+  return out;
+}
+
+/// Wilder's RSI. Entries before there are [period] price changes are null.
+List<double?> _rsiSeries(List<double> c, int period) {
+  final out = List<double?>.filled(c.length, null);
+  if (c.length <= period) return out;
+  double rsiOf(double avgGain, double avgLoss) {
+    if (avgLoss == 0) return avgGain == 0 ? 50.0 : 100.0;
+    return 100 - 100 / (1 + avgGain / avgLoss);
+  }
+
+  double gain = 0, loss = 0;
+  for (var i = 1; i <= period; i++) {
+    final d = c[i] - c[i - 1];
+    if (d >= 0) {
+      gain += d;
+    } else {
+      loss -= d;
+    }
+  }
+  var avgGain = gain / period;
+  var avgLoss = loss / period;
+  out[period] = rsiOf(avgGain, avgLoss);
+  for (var i = period + 1; i < c.length; i++) {
+    final d = c[i] - c[i - 1];
+    final g = d > 0 ? d : 0.0;
+    final l = d < 0 ? -d : 0.0;
+    avgGain = (avgGain * (period - 1) + g) / period;
+    avgLoss = (avgLoss * (period - 1) + l) / period;
+    out[i] = rsiOf(avgGain, avgLoss);
+  }
+  return out;
+}
+
+/// MACD(12, 26, 9): the line, its signal line and the histogram between them.
+class _MacdSeries {
+  _MacdSeries(this.macd, this.signal, this.hist);
+  final List<double?> macd;
+  final List<double?> signal;
+  final List<double?> hist;
+}
+
+_MacdSeries _macdSeries(List<double> c) {
+  final n = c.length;
+  final macd = List<double?>.filled(n, null);
+  final signal = List<double?>.filled(n, null);
+  final hist = List<double?>.filled(n, null);
+  if (n < 27) return _MacdSeries(macd, signal, hist);
+  final fast = _ema(c, 12);
+  final slow = _ema(c, 26);
+  final line = <double>[for (var i = 0; i < n; i++) fast[i] - slow[i]];
+  for (var i = 25; i < n; i++) {
+    macd[i] = line[i];
+  }
+  final tail = line.sublist(25);
+  final sig = _ema(tail, 9);
+  for (var i = 8; i < tail.length; i++) {
+    signal[25 + i] = sig[i];
+    hist[25 + i] = tail[i] - sig[i];
+  }
+  return _MacdSeries(macd, signal, hist);
+}
+
+/// Bollinger Bands: SMA(period) +/- mult standard deviations (population).
+(List<double?>, List<double?>) _bollinger(
+    List<double> c, int period, double mult) {
+  final upper = List<double?>.filled(c.length, null);
+  final lower = List<double?>.filled(c.length, null);
+  for (var i = period - 1; i < c.length; i++) {
+    var sum = 0.0;
+    for (var j = i - period + 1; j <= i; j++) {
+      sum += c[j];
+    }
+    final mean = sum / period;
+    var sq = 0.0;
+    for (var j = i - period + 1; j <= i; j++) {
+      sq += (c[j] - mean) * (c[j] - mean);
+    }
+    final sd = math.sqrt(sq / period);
+    upper[i] = mean + mult * sd;
+    lower[i] = mean - mult * sd;
+  }
+  return (upper, lower);
+}
+
+double _clampD(double v, double lo, double hi) =>
+    v < lo ? lo : (v > hi ? hi : v);
+
 class _ChartCanvas extends StatefulWidget {
   const _ChartCanvas({
     required this.data,
     required this.accent,
+    required this.indicators,
     this.candleMode = false,
-    this.showSma = false,
-    this.showVwap = false,
   });
 
   final Map<String, dynamic> data;
   final Color accent;
+  final Set<String> indicators;
   final bool candleMode;
-  final bool showSma;
-  final bool showVwap;
 
   @override
   State<_ChartCanvas> createState() => _ChartCanvasState();
 }
 
 class _ChartCanvasState extends State<_ChartCanvas> {
-  int? _touchIndex;
+  int? _touchIndex; // index inside the visible window
+
+  // Visible window over the full series: first bar, and how many bars.
+  double _start = 0;
+  double _count = 0;
+  int _seriesLen = 0;
+
+  // Snapshot taken when a pinch begins.
+  double _pinchStart = 0, _pinchCount = 0, _pinchFocal = 0;
+
+  /// Keeps the window valid when the data length changes (a new timeframe,
+  /// or a new bar arriving while on 1D).
+  void _syncWindow(int n) {
+    if (_seriesLen == 0 || _count <= 0) {
+      _start = 0;
+      _count = n.toDouble();
+    } else if (n != _seriesLen) {
+      final wasFull = _count >= _seriesLen - 0.5;
+      final atEnd = _start + _count >= _seriesLen - 0.5;
+      if (wasFull) {
+        _start = 0;
+        _count = n.toDouble();
+      } else if (atEnd) {
+        _start = n - _count;
+      }
+    }
+    _seriesLen = n;
+    _clampWindow(n);
+  }
+
+  void _clampWindow(int n) {
+    final minCount = math.min(10, n).toDouble();
+    _count = _count.clamp(minCount, n.toDouble()).toDouble();
+    _start = _start.clamp(0.0, n - _count).toDouble();
+  }
+
+  double _width() {
+    final box = context.findRenderObject() as RenderBox?;
+    return (box == null || !box.hasSize) ? 0.0 : box.size.width;
+  }
+
+  int _indexAt(double dx, double width, int visible) {
+    final ratio = (dx / width).clamp(0.0, 1.0).toDouble();
+    final i = widget.candleMode
+        ? (ratio * visible).floor()
+        : (ratio * (visible - 1)).round();
+    return i < 0 ? 0 : (i > visible - 1 ? visible - 1 : i);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -763,44 +944,78 @@ class _ChartCanvasState extends State<_ChartCanvas> {
         ),
       );
     }
+    final n = series.length;
+    _syncWindow(n);
 
     final values = [
       for (final p in series) ((p['close'] as num?) ?? 0).toDouble()
     ];
     final opens = [
-      for (final p in series) ((p['open'] as num?) ?? p['close'] as num? ?? 0).toDouble()
+      for (final p in series)
+        ((p['open'] as num?) ?? p['close'] as num? ?? 0).toDouble()
     ];
     final highs = [
-      for (final p in series) ((p['high'] as num?) ?? p['close'] as num? ?? 0).toDouble()
+      for (final p in series)
+        ((p['high'] as num?) ?? p['close'] as num? ?? 0).toDouble()
     ];
     final lows = [
-      for (final p in series) ((p['low'] as num?) ?? p['close'] as num? ?? 0).toDouble()
+      for (final p in series)
+        ((p['low'] as num?) ?? p['close'] as num? ?? 0).toDouble()
     ];
     final baseline = (widget.data['baseline'] as num?)?.toDouble();
-    final sma = widget.showSma ? _sma(values, 20) : null;
-    final vwap = widget.showVwap
+
+    // Indicators are computed on the FULL series (so they are warmed up),
+    // then cut down to the visible window below.
+    final ind = widget.indicators;
+    final smaFull = ind.contains('sma') ? _sma(values, 20) : null;
+    final vwapFull = ind.contains('vwap')
         ? <double?>[for (final p in series) (p['vwap'] as num?)?.toDouble()]
         : null;
+    final bbFull = ind.contains('bb') ? _bollinger(values, 20, 2.0) : null;
+    final rsiFull = ind.contains('rsi') ? _rsiSeries(values, 14) : null;
+    final macdFull = ind.contains('macd') ? _macdSeries(values) : null;
 
-    final t = _touchIndex;
-    String touchLabel;
-    if (t == null) {
-      touchLabel = '';
-    } else if (widget.candleMode) {
-      touchLabel = '${series[t]['label']}   '
-          'O ${_price(opens[t])}  H ${_price(highs[t])}  '
-          'L ${_price(lows[t])}  C ${_price(values[t])}';
-    } else {
-      touchLabel = '${series[t]['label']}   ₹${_price(values[t])}';
+    // Visible window [a, b).
+    var a = _start.round();
+    var b = a + _count.round();
+    if (b > n) b = n;
+    if (a > b - 2) a = b - 2;
+    if (a < 0) a = 0;
+    final visN = b - a;
+    final zoomed = visN < n;
+    List<T> sl<T>(List<T> l) => l.sublist(a, b);
+
+    final vValues = sl(values);
+    final vOpens = sl(opens);
+    final vHighs = sl(highs);
+    final vLows = sl(lows);
+    final vSma = smaFull == null ? null : sl(smaFull);
+    final vVwap = vwapFull == null ? null : sl(vwapFull);
+    final vBbU = bbFull == null ? null : sl(bbFull.$1);
+    final vBbL = bbFull == null ? null : sl(bbFull.$2);
+
+    final t = (_touchIndex != null && _touchIndex! < visN) ? _touchIndex : null;
+    final ti = a + (t ?? visN - 1); // absolute index shown in panel readouts
+
+    String touchLabel = '';
+    if (t != null) {
+      final k = a + t;
+      touchLabel = widget.candleMode
+          ? '${series[k]['label']}   '
+              'O ${_price(opens[k])}  H ${_price(highs[k])}  '
+              'L ${_price(lows[k])}  C ${_price(values[k])}'
+          : '${series[k]['label']}   ₹${_price(values[k])}';
     }
+
+    String fmt1(double? v) => v == null ? '—' : v.toStringAsFixed(1);
+    String fmt2(double? v) => v == null ? '—' : v.toStringAsFixed(2);
 
     return Column(
       children: [
         SizedBox(
           height: 22,
-          child: t == null
-              ? const SizedBox.shrink()
-              : Center(
+          child: t != null
+              ? Center(
                   child: Text(
                     touchLabel,
                     style: const TextStyle(
@@ -808,28 +1023,89 @@ class _ChartCanvasState extends State<_ChartCanvas> {
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600),
                   ),
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        zoomed
+                            ? 'Drag to pan · tap a bar for values'
+                            : 'Pinch to zoom',
+                        style: TextStyle(
+                            color: Brand.mint.withValues(alpha: 0.45),
+                            fontSize: 10),
+                      ),
+                    ),
+                    if (zoomed)
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _start = 0;
+                          _count = n.toDouble();
+                        }),
+                        child: const Padding(
+                          padding: EdgeInsets.only(left: 12),
+                          child: Text('Reset zoom',
+                              style: TextStyle(
+                                  color: Brand.gold,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                  ],
                 ),
         ),
         GestureDetector(
-          onHorizontalDragUpdate: (details) {
-            final box = context.findRenderObject() as RenderBox?;
-            if (box == null) return;
-            final local = box.globalToLocal(details.globalPosition);
-            final ratio = (local.dx / box.size.width).clamp(0.0, 1.0);
-            setState(() =>
-                _touchIndex = (ratio * (values.length - 1)).round());
+          // One finger: crosshair when the whole chart is showing, pan when
+          // zoomed in. (Horizontal-only, so vertical page scrolling still
+          // works.) Two fingers: pinch to zoom.
+          onHorizontalDragUpdate: (d) {
+            final w = _width();
+            if (w <= 0) return;
+            if (zoomed) {
+              setState(() {
+                _touchIndex = null;
+                _start -= d.delta.dx / w * _count;
+                _clampWindow(n);
+              });
+            } else {
+              final box = context.findRenderObject() as RenderBox?;
+              if (box == null) return;
+              final local = box.globalToLocal(d.globalPosition);
+              setState(() => _touchIndex = _indexAt(local.dx, w, visN));
+            }
           },
           onHorizontalDragEnd: (_) => setState(() => _touchIndex = null),
-          onTapDown: (details) {
+          onTapDown: (d) {
             final box = context.findRenderObject() as RenderBox?;
-            if (box == null) return;
-            final local = box.globalToLocal(details.globalPosition);
-            final ratio = (local.dx / box.size.width).clamp(0.0, 1.0);
-            setState(() =>
-                _touchIndex = (ratio * (values.length - 1)).round());
+            final w = _width();
+            if (box == null || w <= 0) return;
+            final local = box.globalToLocal(d.globalPosition);
+            setState(() => _touchIndex = _indexAt(local.dx, w, visN));
           },
           onTapUp: (_) => setState(() => _touchIndex = null),
           onTapCancel: () => setState(() => _touchIndex = null),
+          onScaleStart: (d) {
+            final w = _width();
+            if (w <= 0) return;
+            _pinchStart = _start;
+            _pinchCount = _count;
+            _pinchFocal = (d.localFocalPoint.dx / w).clamp(0.0, 1.0).toDouble();
+          },
+          onScaleUpdate: (d) {
+            if (d.pointerCount < 2) return;
+            final w = _width();
+            if (w <= 0) return;
+            final fx = (d.localFocalPoint.dx / w).clamp(0.0, 1.0).toDouble();
+            setState(() {
+              _touchIndex = null;
+              _count = _pinchCount / d.scale;
+              _clampWindow(n);
+              // Keep the bar that was under the fingers when the pinch began
+              // under the fingers now.
+              _start = _pinchStart + _pinchFocal * _pinchCount - fx * _count;
+              _clampWindow(n);
+            });
+          },
           child: Container(
             height: 240,
             padding: const EdgeInsets.fromLTRB(4, 10, 4, 10),
@@ -841,22 +1117,26 @@ class _ChartCanvasState extends State<_ChartCanvas> {
               size: Size.infinite,
               painter: widget.candleMode
                   ? _CandlePainter(
-                      opens: opens,
-                      highs: highs,
-                      lows: lows,
-                      closes: values,
-                      sma: sma,
-                      vwap: vwap,
+                      opens: vOpens,
+                      highs: vHighs,
+                      lows: vLows,
+                      closes: vValues,
+                      sma: vSma,
+                      vwap: vVwap,
+                      bbUpper: vBbU,
+                      bbLower: vBbL,
                       baseline: baseline,
-                      touchIndex: _touchIndex,
+                      touchIndex: t,
                     )
                   : _LinePainter(
-                      values: values,
+                      values: vValues,
                       accent: widget.accent,
                       baseline: baseline,
-                      sma: sma,
-                      vwap: vwap,
-                      touchIndex: _touchIndex,
+                      sma: vSma,
+                      vwap: vVwap,
+                      bbUpper: vBbU,
+                      bbLower: vBbL,
+                      touchIndex: t,
                     ),
             ),
           ),
@@ -865,13 +1145,96 @@ class _ChartCanvasState extends State<_ChartCanvas> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('${series.first['label']}',
+            Text('${series[a]['label']}',
                 style: TextStyle(
                     color: Brand.mint.withValues(alpha: 0.55), fontSize: 10)),
-            Text('${series.last['label']}',
+            Text('${series[b - 1]['label']}',
                 style: TextStyle(
                     color: Brand.mint.withValues(alpha: 0.55), fontSize: 10)),
           ],
+        ),
+        if (rsiFull != null) ...[
+          const SizedBox(height: 12),
+          _PanelBox(
+            title: 'RSI (14)',
+            value: fmt1(rsiFull[ti]),
+            height: 90,
+            painter: _RsiPainter(
+              values: sl(rsiFull),
+              slotMode: widget.candleMode,
+              touchIndex: t,
+            ),
+          ),
+        ],
+        if (macdFull != null) ...[
+          const SizedBox(height: 12),
+          _PanelBox(
+            title: 'MACD (12, 26, 9)',
+            value: 'MACD ${fmt2(macdFull.macd[ti])}  '
+                'Signal ${fmt2(macdFull.signal[ti])}  '
+                'Hist ${fmt2(macdFull.hist[ti])}',
+            height: 100,
+            painter: _MacdPainter(
+              macd: sl(macdFull.macd),
+              signal: sl(macdFull.signal),
+              hist: sl(macdFull.hist),
+              slotMode: widget.candleMode,
+              touchIndex: t,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Title + live readout above a small indicator chart. Uses the same
+/// horizontal padding as the main chart so the bars line up underneath it.
+class _PanelBox extends StatelessWidget {
+  const _PanelBox({
+    required this.title,
+    required this.value,
+    required this.height,
+    required this.painter,
+  });
+
+  final String title;
+  final String value;
+  final double height;
+  final CustomPainter painter;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(title,
+                style: TextStyle(
+                    color: Brand.mint.withValues(alpha: 0.8),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700)),
+            const Spacer(),
+            Flexible(
+              child: Text(value,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Brand.gold,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Container(
+          height: height,
+          padding: const EdgeInsets.fromLTRB(4, 6, 4, 6),
+          decoration: BoxDecoration(
+            color: Brand.fern.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: CustomPaint(size: Size.infinite, painter: painter),
         ),
       ],
     );
@@ -885,6 +1248,8 @@ class _LinePainter extends CustomPainter {
     this.baseline,
     this.sma,
     this.vwap,
+    this.bbUpper,
+    this.bbLower,
     this.touchIndex,
   });
 
@@ -893,6 +1258,8 @@ class _LinePainter extends CustomPainter {
   final double? baseline;
   final List<double?>? sma;
   final List<double?>? vwap;
+  final List<double?>? bbUpper;
+  final List<double?>? bbLower;
   final int? touchIndex;
 
   @override
@@ -921,6 +1288,18 @@ class _LinePainter extends CustomPainter {
         hi = math.max(hi, v);
       }
     }
+    final bbU = bbUpper;
+    final bbL = bbLower;
+    if (bbU != null && bbL != null) {
+      for (final v in bbU) {
+        if (v == null) continue;
+        hi = math.max(hi, v);
+      }
+      for (final v in bbL) {
+        if (v == null) continue;
+        lo = math.min(lo, v);
+      }
+    }
     final pad = (hi - lo) * 0.08;
     lo -= pad == 0 ? hi * 0.002 : pad;
     hi += pad == 0 ? hi * 0.002 : pad;
@@ -943,6 +1322,17 @@ class _LinePainter extends CustomPainter {
             Offset(x, y), Offset(math.min(x + dash, size.width), y), paint);
         x += dash + gap;
       }
+    }
+
+    if (bbU != null && bbL != null) {
+      _drawBand(
+        canvas,
+        bbU,
+        bbL,
+        Brand.purple,
+        (i) => size.width * i / (values.length - 1),
+        (v) => size.height - ((v - lo) / span) * size.height,
+      );
     }
 
     final path = Path()..moveTo(at(0).dx, at(0).dy);
@@ -1058,6 +1448,8 @@ class _CandlePainter extends CustomPainter {
     required this.closes,
     this.sma,
     this.vwap,
+    this.bbUpper,
+    this.bbLower,
     this.baseline,
     this.touchIndex,
   });
@@ -1068,6 +1460,8 @@ class _CandlePainter extends CustomPainter {
   final List<double> closes;
   final List<double?>? sma;
   final List<double?>? vwap;
+  final List<double?>? bbUpper;
+  final List<double?>? bbLower;
   final double? baseline;
   final int? touchIndex;
 
@@ -1098,6 +1492,18 @@ class _CandlePainter extends CustomPainter {
         hi = math.max(hi, v);
       }
     }
+    final bbU = bbUpper;
+    final bbL = bbLower;
+    if (bbU != null && bbL != null) {
+      for (final v in bbU) {
+        if (v == null) continue;
+        hi = math.max(hi, v);
+      }
+      for (final v in bbL) {
+        if (v == null) continue;
+        lo = math.min(lo, v);
+      }
+    }
     final pad = (hi - lo) * 0.08;
     lo -= pad == 0 ? hi * 0.002 : pad;
     hi += pad == 0 ? hi * 0.002 : pad;
@@ -1119,6 +1525,10 @@ class _CandlePainter extends CustomPainter {
             Offset(x, by), Offset(math.min(x + dash, size.width), by), paint);
         x += dash + gap;
       }
+    }
+
+    if (bbU != null && bbL != null) {
+      _drawBand(canvas, bbU, bbL, Brand.purple, (i) => slot * i + slot / 2, y);
     }
 
     for (var i = 0; i < n; i++) {
@@ -1193,6 +1603,178 @@ class _CandlePainter extends CustomPainter {
       old.touchIndex != touchIndex ||
       old.sma != sma ||
       old.vwap != vwap;
+}
+
+// ===========================================================================
+// RSI / MACD PANEL PAINTERS
+// ===========================================================================
+// Same x-mapping as the main chart: candle slots when [slotMode] is true
+// (candles centred in equal-width slots), edge-to-edge for the line chart.
+
+double _panelX(int i, int n, double width, bool slotMode) =>
+    slotMode ? width / n * (i + 0.5) : (n < 2 ? 0.0 : width * i / (n - 1));
+
+void _dashedH(Canvas canvas, double y, double width, Paint paint) {
+  var x = 0.0;
+  while (x < width) {
+    canvas.drawLine(Offset(x, y), Offset(math.min(x + 4, width), y), paint);
+    x += 8;
+  }
+}
+
+void _panelCrosshair(
+    Canvas canvas, Size size, int? touchIndex, int n, bool slotMode) {
+  if (touchIndex == null || touchIndex < 0 || touchIndex >= n) return;
+  final x = _panelX(touchIndex, n, size.width, slotMode);
+  canvas.drawLine(
+    Offset(x, 0),
+    Offset(x, size.height),
+    Paint()
+      ..color = Brand.gold.withValues(alpha: 0.5)
+      ..strokeWidth = 1,
+  );
+}
+
+class _RsiPainter extends CustomPainter {
+  _RsiPainter({
+    required this.values,
+    required this.slotMode,
+    this.touchIndex,
+  });
+
+  final List<double?> values;
+  final bool slotMode;
+  final int? touchIndex;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = values.length;
+    if (n < 2) return;
+    double y(double v) =>
+        size.height - (_clampD(v, 0.0, 100.0) / 100.0) * size.height;
+    double x(int i) => _panelX(i, n, size.width, slotMode);
+
+    // Overbought / oversold zones.
+    canvas.drawRect(
+      Rect.fromLTRB(0, y(100), size.width, y(70)),
+      Paint()..color = Brand.red.withValues(alpha: 0.07),
+    );
+    canvas.drawRect(
+      Rect.fromLTRB(0, y(30), size.width, y(0)),
+      Paint()..color = Brand.green.withValues(alpha: 0.07),
+    );
+    final guide = Paint()
+      ..color = Brand.mint.withValues(alpha: 0.28)
+      ..strokeWidth = 1;
+    _dashedH(canvas, y(70), size.width, guide);
+    _dashedH(canvas, y(50), size.width, guide);
+    _dashedH(canvas, y(30), size.width, guide);
+
+    _drawOverlay(canvas, values, Brand.teal, x, y, width: 1.8);
+    _panelCrosshair(canvas, size, touchIndex, n, slotMode);
+
+    final tp = TextPainter(textDirection: TextDirection.ltr);
+    void label(String t, double yy) {
+      tp.text = TextSpan(
+          text: t,
+          style: TextStyle(
+              color: Brand.mint.withValues(alpha: 0.5), fontSize: 8.5));
+      tp.layout();
+      tp.paint(canvas, Offset(size.width - tp.width - 2, yy - tp.height - 1));
+    }
+
+    label('70', y(70));
+    label('30', y(30));
+  }
+
+  @override
+  bool shouldRepaint(covariant _RsiPainter old) =>
+      old.values != values ||
+      old.touchIndex != touchIndex ||
+      old.slotMode != slotMode;
+}
+
+class _MacdPainter extends CustomPainter {
+  _MacdPainter({
+    required this.macd,
+    required this.signal,
+    required this.hist,
+    required this.slotMode,
+    this.touchIndex,
+  });
+
+  final List<double?> macd;
+  final List<double?> signal;
+  final List<double?> hist;
+  final bool slotMode;
+  final int? touchIndex;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = macd.length;
+    if (n < 2) return;
+
+    var lo = 0.0, hi = 0.0;
+    for (final list in [macd, signal, hist]) {
+      for (final v in list) {
+        if (v == null) continue;
+        lo = math.min(lo, v);
+        hi = math.max(hi, v);
+      }
+    }
+    if (hi - lo < 1e-9) {
+      // Nothing to draw yet (not enough bars for MACD in this window).
+      final tp = TextPainter(
+        text: TextSpan(
+            text: 'Needs about 35 bars of history',
+            style: TextStyle(
+                color: Brand.mint.withValues(alpha: 0.5), fontSize: 10)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset((size.width - tp.width) / 2, size.height / 2));
+      return;
+    }
+    final pad = (hi - lo) * 0.1;
+    lo -= pad;
+    hi += pad;
+    final span = hi - lo;
+    double y(double v) => size.height - ((v - lo) / span) * size.height;
+    double x(int i) => _panelX(i, n, size.width, slotMode);
+
+    final zeroY = y(0);
+    _dashedH(
+        canvas,
+        zeroY,
+        size.width,
+        Paint()
+          ..color = Brand.mint.withValues(alpha: 0.3)
+          ..strokeWidth = 1);
+
+    final barW = math.max(
+        (slotMode ? size.width / n : size.width / (n - 1)) * 0.6, 1.0);
+    for (var i = 0; i < n; i++) {
+      final h = hist[i];
+      if (h == null) continue;
+      final top = y(math.max(h, 0.0));
+      final bottom = y(math.min(h, 0.0));
+      canvas.drawRect(
+        Rect.fromLTRB(x(i) - barW / 2, top, x(i) + barW / 2,
+            math.max(bottom, top + 0.5)),
+        Paint()
+          ..color = (h >= 0 ? Brand.green : Brand.red).withValues(alpha: 0.65),
+      );
+    }
+
+    _drawOverlay(canvas, macd, Brand.blue, x, y, width: 1.5);
+    _drawOverlay(canvas, signal, Brand.gold, x, y, width: 1.5);
+    _panelCrosshair(canvas, size, touchIndex, n, slotMode);
+  }
+
+  @override
+  bool shouldRepaint(covariant _MacdPainter old) =>
+      old.macd != macd ||
+      old.touchIndex != touchIndex ||
+      old.slotMode != slotMode;
 }
 
 class _StatsRow extends StatelessWidget {
