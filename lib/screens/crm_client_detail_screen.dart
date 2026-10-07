@@ -12,6 +12,7 @@ import '../main.dart';
 import '../models/crm_client.dart';
 import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
+import 'crm_orders_tab.dart';
 
 const _months = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -72,7 +73,7 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
   void initState() {
     super.initState();
     _client = widget.client;
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -149,6 +150,7 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
             Tab(text: 'Profile'),
             Tab(text: 'Notes'),
             Tab(text: 'Holdings'),
+            Tab(text: 'Orders'),
           ],
         ),
       ),
@@ -158,6 +160,7 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
           _ProfileTab(client: _client),
           _NotesTab(ownerEmail: widget.ownerEmail, client: _client),
           _HoldingsTab(ownerEmail: widget.ownerEmail, client: _client),
+          CrmOrdersTab(ownerEmail: widget.ownerEmail, client: _client),
         ],
       ),
     );
