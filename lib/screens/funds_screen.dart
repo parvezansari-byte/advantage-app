@@ -652,6 +652,23 @@ class _FundCard extends StatelessWidget {
                                     color: Brand.gold.withValues(alpha: 0.9),
                                     fontSize: 10.5,
                                     fontWeight: FontWeight.w600)),
+                            if (live && fund['nav_date'] != null) ...[
+                              const SizedBox(width: 4),
+                              Text('(${fund['nav_date']})',
+                                  style: TextStyle(
+                                      color: Brand.mint.withValues(alpha: 0.6),
+                                      fontSize: 9.5)),
+                            ],
+                            if (fund['nav_day_pct'] is num) ...[
+                              const SizedBox(width: 5),
+                              Text(_pct(fund['nav_day_pct'] as num?, sign: true),
+                                  style: TextStyle(
+                                      color: (fund['nav_day_pct'] as num) >= 0
+                                          ? Brand.green
+                                          : Brand.red,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700)),
+                            ],
                             if (fund['manager'] != null) ...[
                               Text('  ·  ',
                                   style: TextStyle(
