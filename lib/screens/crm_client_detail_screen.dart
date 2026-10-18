@@ -12,6 +12,7 @@ import '../main.dart';
 import '../models/crm_client.dart';
 import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
+import 'crm_holdings_tab.dart';
 import 'crm_orders_tab.dart';
 
 const _months = [
@@ -30,28 +31,6 @@ String _fmtDateTime(String? iso) {
   } catch (_) {
     return iso;
   }
-}
-
-/// Indian-digit-grouped rupee amount, no decimals — matches the style used
-/// elsewhere in the app (chart/options screens) instead of pulling in intl.
-String _inr(num value) {
-  final n = value.round();
-  final s = n.abs().toString();
-  String grouped;
-  if (s.length <= 3) {
-    grouped = s;
-  } else {
-    final last3 = s.substring(s.length - 3);
-    var rest = s.substring(0, s.length - 3);
-    final buf = <String>[];
-    while (rest.length > 2) {
-      buf.insert(0, rest.substring(rest.length - 2));
-      rest = rest.substring(0, rest.length - 2);
-    }
-    if (rest.isNotEmpty) buf.insert(0, rest);
-    grouped = '${buf.join(',')},$last3';
-  }
-  return '${n < 0 ? '-' : ''}₹$grouped';
 }
 
 class CrmClientDetailScreen extends StatefulWidget {
@@ -159,7 +138,7 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
         children: [
           _ProfileTab(client: _client),
           _NotesTab(ownerEmail: widget.ownerEmail, client: _client),
-          _HoldingsTab(ownerEmail: widget.ownerEmail, client: _client),
+          CrmHoldingsTab(ownerEmail: widget.ownerEmail, client: _client),
           CrmOrdersTab(ownerEmail: widget.ownerEmail, client: _client),
         ],
       ),
@@ -377,149 +356,6 @@ class _NotesTabState extends State<_NotesTab> {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _HoldingsTab extends StatefulWidget {
-  final String ownerEmail;
-  final CrmClient client;
-  const _HoldingsTab({required this.ownerEmail, required this.client});
-
-  @override
-  State<_HoldingsTab> createState() => _HoldingsTabState();
-}
-
-class _HoldingsTabState extends State<_HoldingsTab> {
-  List<CrmHolding> _holdings = [];
-  double _total = 0;
-  String? _lastFetched;
-  bool _loading = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final (holdings, total, lastFetched) =
-          await CrmApiService.getHoldings(widget.ownerEmail, widget.client.id!);
-      setState(() {
-        _holdings = holdings;
-        _total = total;
-        _lastFetched = lastFetched;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator(color: Brand.gold));
-    }
-    if (_error != null) {
-      return Center(child: Text(_error!, style: const TextStyle(color: Brand.red)));
-    }
-    if (_holdings.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _load,
-        color: Brand.gold,
-        backgroundColor: Brand.fern,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            const SizedBox(height: 40),
-            const Icon(Icons.pie_chart_outline, color: Brand.mint, size: 48),
-            const SizedBox(height: 12),
-            const Text(
-              'No holdings synced yet',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Brand.paper, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Once this client is registered on NSE and the portfolio sync is set up, '
-              'their mutual fund holdings will appear here automatically.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Brand.mint, fontSize: 13),
-            ),
-          ],
-        ),
-      );
-    }
-    return RefreshIndicator(
-      onRefresh: _load,
-      color: Brand.gold,
-      backgroundColor: Brand.fern,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Brand.fern.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Brand.gold.withValues(alpha: 0.3)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Total portfolio value', style: TextStyle(color: Brand.mint, fontSize: 12)),
-                const SizedBox(height: 4),
-                Text(_inr(_total),
-                    style: const TextStyle(color: Brand.gold, fontSize: 26, fontWeight: FontWeight.bold)),
-                if (_lastFetched != null) ...[
-                  const SizedBox(height: 6),
-                  Text('As of $_lastFetched', style: const TextStyle(color: Brand.mint, fontSize: 11)),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          ..._holdings.map((h) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Brand.fern.withValues(alpha: 0.4),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Brand.gold.withValues(alpha: 0.15)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(h.schemeName,
-                              style: const TextStyle(
-                                  color: Brand.paper, fontWeight: FontWeight.bold, fontSize: 13)),
-                          const SizedBox(height: 2),
-                          Text('${h.units} units · NAV ₹${h.nav}',
-                              style: const TextStyle(color: Brand.mint, fontSize: 11)),
-                        ],
-                      ),
-                    ),
-                    Text(_inr(h.currentValue),
-                        style: const TextStyle(color: Brand.gold, fontWeight: FontWeight.bold, fontSize: 14)),
-                  ],
-                ),
-              )),
-        ],
-      ),
     );
   }
 }

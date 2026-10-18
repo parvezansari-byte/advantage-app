@@ -19,7 +19,9 @@ import '../main.dart';
 import '../models/crm_client.dart';
 import '../services/api_service.dart';
 import '../services/crm_api_service.dart' show CrmApiException;
+import '../services/holdings_api_service.dart';
 import '../services/orders_api_service.dart';
+import 'crm_holdings_tab.dart' show formatUnits;
 import 'crm_orders_tab.dart' show formatInr;
 
 const _minAmount = 100.0; // the server enforces the same floor
@@ -60,7 +62,51 @@ class _CrmPlaceOrderScreenState extends State<CrmPlaceOrderScreen> {
   String? _error;
   String _key = OrdersApiService.newIdempotencyKey();
 
+  // What the client holds, by scheme code, so redemptions can be checked.
+  final Map<String, ManualHolding> _held = {};
+  bool _heldLoaded = false;
+
   bool get _kycValid => _kycOk.contains(widget.client.kycStatus);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHeld();
+  }
+
+  Future<void> _loadHeld() async {
+    try {
+      final p = await HoldingsApiService.getPortfolio(
+          widget.ownerEmail, widget.client.id!);
+      if (!mounted) return;
+      setState(() {
+        for (final h in p.holdings) {
+          final prev = _held[h.schemeCode];
+          // Several folios of one fund add up.
+          _held[h.schemeCode] = prev == null
+              ? h
+              : ManualHolding(
+                  id: prev.id,
+                  schemeCode: prev.schemeCode,
+                  schemeName: prev.schemeName,
+                  folioNumber: '',
+                  units: prev.units + h.units,
+                  avgNav: prev.avgNav,
+                  invested: prev.invested + h.invested,
+                  currentNav: prev.currentNav,
+                  navDate: prev.navDate,
+                  currentValue: (prev.currentValue != null &&
+                          h.currentValue != null)
+                      ? prev.currentValue! + h.currentValue!
+                      : null,
+                );
+        }
+        _heldLoaded = true;
+      });
+    } catch (_) {
+      // Not fatal: the server checks redemptions again whatever happens here.
+    }
+  }
 
   @override
   void dispose() {
@@ -129,6 +175,22 @@ class _CrmPlaceOrderScreenState extends State<CrmPlaceOrderScreen> {
       if (amount == null || amount <= 0) return 'Enter an amount.';
       if (_type != 'REDEEM' && amount < _minAmount) {
         return 'Minimum amount is ${formatInr(_minAmount)}.';
+      }
+    }
+    if (_type == 'REDEEM' && _heldLoaded) {
+      final held = _held[_fund!['code']];
+      if (held == null) {
+        return 'No holding is recorded for this fund. Add it under the '
+            "client's Holdings tab first.";
+      }
+      if (_redeemByUnits && units! > held.units + 0.0005) {
+        return 'The client holds only ${formatUnits(held.units)} units.';
+      }
+      if (!_redeemByUnits &&
+          held.currentValue != null &&
+          amount! > held.currentValue! + 1) {
+        return 'That is more than the holding is worth '
+            '(${formatInr(held.currentValue!)}).';
       }
     }
     if (_type == 'SIP') {
@@ -454,6 +516,24 @@ class _CrmPlaceOrderScreenState extends State<CrmPlaceOrderScreen> {
     );
   }
 
+  Widget _heldNotice() {
+    final h = _held[_fund!['code']];
+    if (h == null) {
+      return _box(
+        Brand.red,
+        Icons.warning_amber_outlined,
+        'No holding is recorded for this fund. Add it under the client\'s '
+        'Holdings tab before redeeming.',
+      );
+    }
+    return _box(
+      Brand.teal,
+      Icons.pie_chart_outline,
+      'Client holds ${formatUnits(h.units)} units'
+      '${h.currentValue == null ? '' : ' (about ${formatInr(h.currentValue!)})'}.',
+    );
+  }
+
   Widget _label(String t) => Padding(
         padding: const EdgeInsets.only(bottom: 8, top: 4),
         child: Text(t,
@@ -506,6 +586,10 @@ class _CrmPlaceOrderScreenState extends State<CrmPlaceOrderScreen> {
             const SizedBox(height: 12),
             _label('FUND'),
             _fundPicker(),
+            if (_type == 'REDEEM' && _fund != null && _heldLoaded) ...[
+              const SizedBox(height: 8),
+              _heldNotice(),
+            ],
             const SizedBox(height: 16),
             _label('DETAILS'),
             if (_type == 'REDEEM')
