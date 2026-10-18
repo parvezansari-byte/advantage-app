@@ -15,6 +15,7 @@ import 'market_screen.dart';
 import 'stocks_screen.dart';
 import 'funds_screen.dart';
 import 'more_screen.dart';
+import '../services/push_service.dart';
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
   @override
@@ -29,6 +30,12 @@ class _MainShellState extends State<MainShell> {
     FundsScreen(),
     MoreScreen(),
   ];
+  @override
+  void initState() {
+    super.initState();
+    // Register this phone for push notifications once logged in.
+    PushService.syncToken();
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(

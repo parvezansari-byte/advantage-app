@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import '../services/push_service.dart';
 
 const _signalIndices = ['NIFTY 50', 'BANK NIFTY'];
 
@@ -89,6 +90,12 @@ class _SignalScreenState extends State<SignalScreen> {
     _load();
   }
 
+  Future<void> _testPush() async {
+    final msg = await PushService.sendTest();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Future<void> _runBacktest() async {
     final email = AuthService.email;
     if (email == null || email.isEmpty) return;
@@ -145,6 +152,12 @@ class _SignalScreenState extends State<SignalScreen> {
         title: const Text('Nifty Signals',
             style: TextStyle(color: Brand.gold, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            tooltip: 'Send a test notification',
+            icon: const Icon(Icons.notifications_active_outlined,
+                color: Brand.mint),
+            onPressed: _testPush,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Brand.mint),
             onPressed: () => _load(),

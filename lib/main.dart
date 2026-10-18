@@ -7,11 +7,14 @@ import 'package:flutter/material.dart';
 import 'screens/main_shell.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
+import 'services/push_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Restore a saved session so returning users skip the login screen.
   await AuthService.restore();
+  // Firebase push notifications (no-op if Firebase isn't configured).
+  await PushService.init();
   runApp(const ResearchApp());
 }
 
@@ -41,6 +44,7 @@ class ResearchApp extends StatelessWidget {
     return MaterialApp(
       title: 'Advantage',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: PushService.messengerKey,
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: Brand.vault,

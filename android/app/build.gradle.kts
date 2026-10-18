@@ -43,3 +43,10 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// Firebase (push notifications): only applied once google-services.json has
+// been downloaded from the Firebase console into android/app/. Without that
+// file the plugin would fail the build, so skip it until it's there.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
