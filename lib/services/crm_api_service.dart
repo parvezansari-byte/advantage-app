@@ -5,7 +5,7 @@
 // Advantage app instead of a separate install.
 
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'authed_http.dart' as http;
 
 import '../models/crm_client.dart';
 import 'api_service.dart' show ApiService;

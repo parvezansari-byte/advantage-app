@@ -6,7 +6,7 @@
 
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'authed_http.dart' as http;
 
 import 'api_service.dart' show ApiService;
 import 'crm_api_service.dart' show CrmApiException;

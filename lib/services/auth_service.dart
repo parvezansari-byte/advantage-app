@@ -21,6 +21,10 @@ import 'api_service.dart';
 class AuthService {
   static String? _email;
   static String? _name;
+  static String? _token;
+
+  /// Signed token from the server; sent on every request (see authed_http.dart).
+  static String? get token => _token;
 
   static String? get email => _email;
   static String? get name => _name;
@@ -36,6 +40,7 @@ class AuthService {
   }
 
   static Future<void> logout() async {
+    _token = null;
     _email = null;
     _name = null;
   }
@@ -52,6 +57,7 @@ class AuthService {
     if (r.statusCode == 200) {
       final d = jsonDecode(r.body);
       _setSession(d['email'], d['name'] ?? '');
+      _token = d['token']?.toString();
       return;
     }
     if (r.statusCode == 401) {
@@ -74,6 +80,7 @@ class AuthService {
     if (r.statusCode == 200) {
       final d = jsonDecode(r.body);
       _setSession(d['email'], d['name'] ?? '');
+      _token = d['token']?.toString();
       return;
     }
     if (r.statusCode == 409) {
@@ -127,6 +134,7 @@ class AuthService {
     if (r.statusCode == 200) {
       final d = jsonDecode(r.body);
       _setSession(d['email'], d['name'] ?? '');
+      _token = d['token']?.toString();
       return;
     }
     throw ApiException(_detail(r) ?? 'Verification failed');
