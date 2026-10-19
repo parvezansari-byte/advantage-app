@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (e) {
-      // Most likely the free Render instance is still waking up.
+      debugPrint('LOGIN ERROR: $e');
       if (mounted) {
         setState(() => _error =
             'Could not reach the server. If this is the first request in a '
