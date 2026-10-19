@@ -5,6 +5,7 @@ import '../main.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
 import 'stock_screen.dart';
 import 'planner_screen.dart';
 import 'xray_screen.dart';
@@ -128,6 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
+                  const NotificationBell(),
                   IconButton(
                     icon: const Icon(Icons.logout, color: Brand.mint, size: 20),
                     tooltip: 'Sign out',
