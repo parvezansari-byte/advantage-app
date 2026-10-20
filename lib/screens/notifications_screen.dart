@@ -23,6 +23,8 @@ IconData _iconFor(String kind) {
       return Icons.show_chart;
     case 'digest':
       return Icons.article_outlined;
+    case 'nav':
+      return Icons.trending_up;
     case 'test':
       return Icons.notifications_active_outlined;
     default:
