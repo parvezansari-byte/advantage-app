@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/shareholding_service.dart';
 
-/// "Who owns this stock" card: promoter / public (and FII / DII when the
-/// source reports them) for the latest quarter, plus a short history.
+/// "Who owns this stock" card: promoters, FII, DII and the rest of the public
+/// for the latest quarter, with the change since the previous quarter and a
+/// short history.
 class ShareholdingCard extends StatefulWidget {
   final String symbol;
   const ShareholdingCard({super.key, required this.symbol});
@@ -24,13 +25,16 @@ class _ShareholdingCardState extends State<ShareholdingCard> {
   void _retry() =>
       setState(() => _future = ShareholdingService.fetch(widget.symbol));
 
-  static String _pct(double? v) => v == null ? '\u2014' : '${v.toStringAsFixed(2)}%';
+  static String _pct(double? v) =>
+      v == null ? '\u2014' : '${v.toStringAsFixed(2)}%';
 
   static String _quarter(String iso) {
     final p = iso.split('-');
     if (p.length != 3) return iso;
-    const m = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug',
-        'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+      'Oct', 'Nov', 'Dec'
+    ];
     final mi = int.tryParse(p[1]) ?? 0;
     return '${mi >= 1 && mi <= 12 ? m[mi] : p[1]} ${p[0]}';
   }
@@ -71,12 +75,14 @@ class _ShareholdingCardState extends State<ShareholdingCard> {
 
   Widget _body(ShareholdingResult res) {
     final q = res.latest!;
+    final hasSplit = q.fii != null && q.dii != null;
     final parts = <_Part>[
-      _Part('Promoters', q.promoter, Brand.gold),
-      _Part('FII', q.fii, Brand.blue),
-      _Part('DII', q.dii, Brand.purple),
-      _Part('Public', q.public, Brand.teal),
-      _Part('Other', q.other, Colors.blueGrey),
+      _Part('Promoters', q.promoter, Brand.gold, q.promoterChg),
+      if (hasSplit) _Part('FII (foreign)', q.fii, Brand.blue, q.fiiChg),
+      if (hasSplit) _Part('DII (domestic)', q.dii, Brand.purple, q.diiChg),
+      _Part(hasSplit ? 'Public & retail' : 'Public',
+          hasSplit ? q.publicRest : q.public, Brand.teal, null),
+      _Part('Other', q.other, Colors.blueGrey, null),
     ].where((p) => p.value != null && p.value! > 0).toList();
     final total = parts.fold<double>(0, (s, p) => s + p.value!);
 
@@ -122,44 +128,63 @@ class _ShareholdingCardState extends State<ShareholdingCard> {
                 Container(
                     width: 10,
                     height: 10,
-                    decoration: BoxDecoration(
-                        color: p.color, shape: BoxShape.circle)),
+                    decoration:
+                        BoxDecoration(color: p.color, shape: BoxShape.circle)),
                 const SizedBox(width: 8),
                 Expanded(child: Text(p.label)),
                 Text(_pct(p.value),
                     style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (p.label == 'Promoters' && q.promoterChg != null) ...[
+                if (p.change != null) ...[
                   const SizedBox(width: 8),
-                  _Change(q.promoterChg!),
+                  _Change(p.change!),
                 ],
               ],
             ),
           ),
+        if (q.mf != null && q.mf! > 0)
+          Padding(
+            padding: const EdgeInsets.only(left: 18, top: 2),
+            child: Text('Mutual funds hold ${_pct(q.mf)} (part of DII)',
+                style: const TextStyle(color: Brand.mint, fontSize: 12)),
+          ),
         if (res.quarters.length > 1) ...[
           const Divider(height: 24),
-          const Text('Promoter holding by quarter',
-              style: TextStyle(color: Brand.mint, fontSize: 12)),
-          const SizedBox(height: 6),
+          _historyRow(const [
+            'Quarter', 'Promoter', 'FII', 'DII'
+          ], header: true),
           for (final h in res.quarters.take(5))
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Expanded(
-                      child: Text(_quarter(h.date),
-                          style: const TextStyle(fontSize: 13))),
-                  Text(_pct(h.promoter), style: const TextStyle(fontSize: 13)),
-                ],
-              ),
-            ),
+            _historyRow([
+              _quarter(h.date),
+              _pct(h.promoter),
+              _pct(h.fii),
+              _pct(h.dii),
+            ]),
         ],
         if (res.stale)
           const Padding(
             padding: EdgeInsets.only(top: 8),
-            child: Text('Showing the last saved copy. The exchange could not be reached.',
+            child: Text(
+                'Showing the last saved copy. The exchange could not be reached.',
                 style: TextStyle(color: Brand.mint, fontSize: 11)),
           ),
       ],
+    );
+  }
+
+  Widget _historyRow(List<String> cells, {bool header = false}) {
+    final style = TextStyle(
+        fontSize: header ? 11 : 13, color: header ? Brand.mint : null);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(flex: 3, child: Text(cells[0], style: style)),
+          for (final c in cells.skip(1))
+            Expanded(
+                flex: 2,
+                child: Text(c, textAlign: TextAlign.right, style: style)),
+        ],
+      ),
     );
   }
 }
@@ -168,7 +193,8 @@ class _Part {
   final String label;
   final double? value;
   final Color color;
-  const _Part(this.label, this.value, this.color);
+  final double? change;
+  const _Part(this.label, this.value, this.color, this.change);
 }
 
 class _Change extends StatelessWidget {
@@ -178,7 +204,8 @@ class _Change extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (v == 0) {
-      return const Text('0.00', style: TextStyle(color: Brand.mint, fontSize: 12));
+      return const Text('0.00',
+          style: TextStyle(color: Brand.mint, fontSize: 12));
     }
     final up = v > 0;
     return Text('${up ? '\u25b2' : '\u25bc'} ${v.abs().toStringAsFixed(2)}',
