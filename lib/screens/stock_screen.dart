@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../main.dart';
 import '../services/api_service.dart';
+import '../widgets/shareholding_card.dart';
 
 class StockScreen extends StatefulWidget {
   final String symbol;
@@ -252,6 +253,7 @@ class _StockScreenState extends State<StockScreen>
           _Row('Free Cashflow', '\u20b9${_fmt(f['free_cashflow_cr'])} cr'),
           _Row('Operating Cashflow', '\u20b9${_fmt(f['operating_cashflow_cr'])} cr'),
         ]),
+        ShareholdingCard(symbol: widget.symbol),
         _aiAnalysisCard(),
         _disclaimer(),
       ],
