@@ -1,12 +1,22 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'api_service.dart';
 
 double? _d(dynamic v) => v is num ? v.toDouble() : null;
 
+/// A fund, either in a dropdown list or as a row of a plan.
 class AllocFund {
   final String name, category;
   final double? aum, expenseRatio, r1y, r3y, r5y, sharpe;
+  final bool hasHistory;
+  // Plan rows only:
+  final double weight, share, expected;
+  final double? historical;
+  final int amount;
+  final String basis;
+  final bool hypothetical;
+
   const AllocFund({
     required this.name,
     required this.category,
@@ -16,6 +26,14 @@ class AllocFund {
     this.r3y,
     this.r5y,
     this.sharpe,
+    this.hasHistory = true,
+    this.weight = 0,
+    this.share = 0,
+    this.expected = 0,
+    this.historical,
+    this.amount = 0,
+    this.basis = '',
+    this.hypothetical = false,
   });
 
   factory AllocFund.fromJson(Map<String, dynamic> j) => AllocFund(
@@ -27,36 +45,59 @@ class AllocFund {
         r3y: _d(j['r_3y']),
         r5y: _d(j['r_5y']),
         sharpe: _d(j['sharpe']),
+        hasHistory: j['has_history'] != false,
+        weight: _d(j['weight']) ?? 0,
+        share: _d(j['share']) ?? 0,
+        expected: _d(j['expected']) ?? 0,
+        historical: _d(j['historical']),
+        amount: (j['amount'] is num) ? (j['amount'] as num).round() : 0,
+        basis: '${j['basis'] ?? ''}',
+        hypothetical: j['hypothetical'] == true,
       );
 
   /// Drops the plan suffix the snapshot puts on every name.
   String get shortName => name
-      .replaceAll(RegExp(r'\s*-\s*Regular Plan\s*-\s*Growth', caseSensitive: false), '')
+      .replaceAll(
+          RegExp(r'\s*-\s*Regular Plan\s*-\s*Growth', caseSensitive: false), '')
       .replaceAll(RegExp(r'-Reg\(G\)|\(G\)|-Reg', caseSensitive: false), '')
       .trim();
 }
 
-class AllocReturn {
-  final double cagr;
-  final double? historical;
-  final String basis;
-  final bool hypothetical;
-  const AllocReturn(this.cagr, this.historical, this.basis, this.hypothetical);
+class AllocClass {
+  final String key, label;
+  final double pct;
+  final int amount;
+  final double? expected, volatility;
+  final List<AllocFund> funds;
+  const AllocClass({
+    required this.key,
+    required this.label,
+    required this.pct,
+    required this.amount,
+    required this.funds,
+    this.expected,
+    this.volatility,
+  });
 
-  factory AllocReturn.fromJson(Map<String, dynamic> j) => AllocReturn(
-        _d(j['cagr']) ?? 0,
-        _d(j['historical']),
-        '${j['basis'] ?? ''}',
-        j['hypothetical'] == true,
+  factory AllocClass.fromJson(Map<String, dynamic> j) => AllocClass(
+        key: '${j['key']}',
+        label: '${j['label']}',
+        pct: _d(j['pct']) ?? 0,
+        amount: (j['amount'] as num).round(),
+        expected: _d(j['expected']),
+        volatility: _d(j['volatility']),
+        funds: ((j['funds'] as List?) ?? [])
+            .whereType<Map>()
+            .map((e) => AllocFund.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
       );
 }
 
-class AllocBucket {
-  final int pct;
-  final double amount;
-  final AllocFund? fund;
-  final AllocReturn ret;
-  const AllocBucket(this.pct, this.amount, this.fund, this.ret);
+class AllocCategory {
+  final String cls, category;
+  final double share;
+  final int amount;
+  const AllocCategory(this.cls, this.category, this.share, this.amount);
 }
 
 class AllocPoint {
@@ -66,24 +107,25 @@ class AllocPoint {
 }
 
 class AllocPlan {
-  final String mode, how;
-  final int years, equityPct, debtPct;
-  final bool autoSplit, hypothetical;
-  final AllocBucket equity, debt;
+  final String mode, risk, how;
+  final int years;
+  final bool auto, normalized, hypothetical;
+  final List<AllocClass> classes;
+  final List<AllocCategory> byCategory;
   final double portBase, portLow, portHigh;
   final List<AllocPoint> points;
   final double invested, low, base, high;
   final List<String> notes;
   const AllocPlan({
     required this.mode,
+    required this.risk,
     required this.how,
     required this.years,
-    required this.equityPct,
-    required this.debtPct,
-    required this.autoSplit,
+    required this.auto,
+    required this.normalized,
     required this.hypothetical,
-    required this.equity,
-    required this.debt,
+    required this.classes,
+    required this.byCategory,
     required this.portBase,
     required this.portLow,
     required this.portHigh,
@@ -95,46 +137,51 @@ class AllocPlan {
     required this.notes,
   });
 
-  factory AllocPlan.fromJson(Map<String, dynamic> j) {
-    final split = Map<String, dynamic>.from(j['split'] as Map);
-    final rets = Map<String, dynamic>.from(j['returns'] as Map);
-    AllocBucket bucket(String key) {
-      final b = Map<String, dynamic>.from(split[key] as Map);
-      final f = b['fund'];
-      return AllocBucket(
-        (b['pct'] as num).toInt(),
-        (b['amount'] as num).toDouble(),
-        f is Map ? AllocFund.fromJson(Map<String, dynamic>.from(f)) : null,
-        AllocReturn.fromJson(Map<String, dynamic>.from(rets[key] as Map)),
-      );
+  AllocClass? classOf(String key) {
+    for (final c in classes) {
+      if (c.key == key) return c;
     }
+    return null;
+  }
 
-    final port = Map<String, dynamic>.from(rets['portfolio'] as Map);
+  factory AllocPlan.fromJson(Map<String, dynamic> j) {
+    final port = Map<String, dynamic>.from(
+        (j['returns'] as Map)['portfolio'] as Map);
     final sum = Map<String, dynamic>.from(j['summary'] as Map);
-    final pts = ((j['projection'] as List?) ?? [])
-        .whereType<Map>()
-        .map((e) => AllocPoint(
-              (e['year'] as num).toInt(),
-              (e['invested'] as num).toDouble(),
-              (e['low'] as num).toDouble(),
-              (e['base'] as num).toDouble(),
-              (e['high'] as num).toDouble(),
-            ))
-        .toList();
     return AllocPlan(
       mode: '${j['mode']}',
+      risk: '${j['risk']}',
       how: '${j['how'] ?? ''}',
       years: (j['years'] as num).toInt(),
-      equityPct: (j['equity_pct'] as num).toInt(),
-      debtPct: (j['debt_pct'] as num).toInt(),
-      autoSplit: j['auto_split'] == true,
+      auto: j['auto'] == true,
+      normalized: j['normalized'] == true,
       hypothetical: j['hypothetical'] == true,
-      equity: bucket('equity'),
-      debt: bucket('debt'),
+      classes: ((j['classes'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => AllocClass.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      byCategory: ((j['by_category'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => AllocCategory(
+                '${e['class']}',
+                '${e['category']}',
+                _d(e['share']) ?? 0,
+                (e['amount'] as num).round(),
+              ))
+          .toList(),
       portBase: _d(port['base']) ?? 0,
       portLow: _d(port['low']) ?? 0,
       portHigh: _d(port['high']) ?? 0,
-      points: pts,
+      points: ((j['projection'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => AllocPoint(
+                (e['year'] as num).toInt(),
+                (e['invested'] as num).toDouble(),
+                (e['low'] as num).toDouble(),
+                (e['base'] as num).toDouble(),
+                (e['high'] as num).toDouble(),
+              ))
+          .toList(),
       invested: _d(sum['invested']) ?? 0,
       low: _d(sum['low']) ?? 0,
       base: _d(sum['base']) ?? 0,
@@ -144,16 +191,66 @@ class AllocPlan {
   }
 }
 
+/// class key -> category -> funds
 class AllocOptions {
-  final List<AllocFund> equity, debt;
-  const AllocOptions(this.equity, this.debt);
+  final Map<String, Map<String, List<AllocFund>>> byClass;
+  const AllocOptions(this.byClass);
+
+  List<String> categories(String cls) =>
+      (byClass[cls] ?? const <String, List<AllocFund>>{}).keys.toList();
+
+  List<AllocFund> funds(String cls, String category) =>
+      (byClass[cls] ?? const <String, List<AllocFund>>{})[category] ??
+      const <AllocFund>[];
+}
+
+/// What the user asked for. [classes] and [picks] stay null in Auto mode.
+class AllocRequest {
+  final String mode, risk;
+  final double amount;
+  final int years;
+  final Map<String, double>? classes;
+  final Map<String, List<MapEntry<String, double>>>? picks; // name -> weight
+
+  const AllocRequest({
+    required this.mode,
+    required this.amount,
+    required this.years,
+    required this.risk,
+    this.classes,
+    this.picks,
+  });
+
+  Map<String, dynamic> toJson() {
+    final m = <String, dynamic>{
+      'mode': mode,
+      'amount': amount,
+      'years': years,
+      'risk': risk,
+    };
+    if (classes != null) m['classes'] = classes;
+    if (picks != null) {
+      m['picks'] = {
+        for (final e in picks!.entries)
+          e.key: [
+            for (final p in e.value) {'name': p.key, 'weight': p.value}
+          ],
+      };
+    }
+    return m;
+  }
 }
 
 class AllocationService {
-  static List<AllocFund> _funds(dynamic v) => ((v as List?) ?? [])
-      .whereType<Map>()
-      .map((e) => AllocFund.fromJson(Map<String, dynamic>.from(e)))
-      .toList();
+  static const _json = {'Content-Type': 'application/json'};
+
+  static String _error(http.Response r, String fallback) {
+    try {
+      final d = (jsonDecode(r.body) as Map<String, dynamic>)['detail'];
+      if (d is String) return d;
+    } catch (_) {}
+    return fallback;
+  }
 
   static Future<AllocOptions> options() async {
     final r = await http
@@ -163,38 +260,37 @@ class AllocationService {
       throw Exception('Could not load the fund list');
     }
     final j = jsonDecode(r.body) as Map<String, dynamic>;
-    return AllocOptions(_funds(j['equity']), _funds(j['debt']));
+    final out = <String, Map<String, List<AllocFund>>>{};
+    for (final cls in j.keys) {
+      final cats = Map<String, dynamic>.from(j[cls] as Map);
+      out[cls] = {
+        for (final c in cats.entries)
+          c.key: ((c.value as List?) ?? [])
+              .whereType<Map>()
+              .map((e) => AllocFund.fromJson(Map<String, dynamic>.from(e)))
+              .toList(),
+      };
+    }
+    return AllocOptions(out);
   }
 
-  static Future<AllocPlan> plan({
-    required String mode,
-    required double amount,
-    required int years,
-    required String risk,
-    int? equityPct,
-    String? equityFund,
-    String? debtFund,
-  }) async {
-    final q = <String, String>{
-      'mode': mode,
-      'amount': amount.toStringAsFixed(0),
-      'years': '$years',
-      'risk': risk,
-    };
-    if (equityPct != null) q['equity_pct'] = '$equityPct';
-    if (equityFund != null) q['equity_fund'] = equityFund;
-    if (debtFund != null) q['debt_fund'] = debtFund;
-    final uri = Uri.parse('${ApiService.baseUrl}/allocation/plan')
-        .replace(queryParameters: q);
-    final r = await http.get(uri).timeout(const Duration(seconds: 60));
+  static Future<AllocPlan> plan(AllocRequest req) async {
+    final r = await http
+        .post(Uri.parse('${ApiService.baseUrl}/allocation/plan'),
+            headers: _json, body: jsonEncode(req.toJson()))
+        .timeout(const Duration(seconds: 60));
     if (r.statusCode == 200) {
       return AllocPlan.fromJson(jsonDecode(r.body) as Map<String, dynamic>);
     }
-    String msg = 'Could not build the allocation';
-    try {
-      final d = (jsonDecode(r.body) as Map<String, dynamic>)['detail'];
-      if (d is String) msg = d;
-    } catch (_) {}
-    throw Exception(msg);
+    throw Exception(_error(r, 'Could not build the allocation'));
+  }
+
+  static Future<Uint8List> pdf(AllocRequest req) async {
+    final r = await http
+        .post(Uri.parse('${ApiService.baseUrl}/allocation/pdf'),
+            headers: _json, body: jsonEncode(req.toJson()))
+        .timeout(const Duration(seconds: 90));
+    if (r.statusCode == 200) return r.bodyBytes;
+    throw Exception(_error(r, 'Could not create the PDF'));
   }
 }
