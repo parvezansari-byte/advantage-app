@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../services/api_service.dart';
+import 'allocation_screen.dart';
 
 // ===========================================================================
 // FORMATTING
@@ -181,6 +182,15 @@ class _FundsScreenState extends State<FundsScreen> {
         title: const Text('Mutual Funds',
             style: TextStyle(color: Brand.gold, fontWeight: FontWeight.bold)),
         actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AllocationScreen()),
+            ),
+            icon: const Icon(Icons.auto_graph, color: Brand.gold, size: 18),
+            label: const Text('Auto allocate',
+                style: TextStyle(color: Brand.gold, fontSize: 12.5)),
+          ),
           IconButton(
             icon: const Icon(Icons.search, color: Brand.mint),
             onPressed: () => showModalBottomSheet(
