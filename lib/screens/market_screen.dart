@@ -6,6 +6,8 @@ import '../main.dart';
 import '../services/api_service.dart';
 import 'market_mood_screen.dart';
 import 'market_intelligence_screen.dart';
+import '../widgets/market_movers.dart';
+import '../widgets/market_pulse.dart';
 
 class MarketScreen extends StatefulWidget {
   const MarketScreen({super.key});
@@ -81,7 +83,7 @@ class _MarketScreenState extends State<MarketScreen> {
               ],
             ),
             const SizedBox(height: 4),
-            const Text('Live Indian indices Â· refreshes every minute',
+            const Text('Live Indian indices \u00b7 refreshes every minute',
                 style: TextStyle(color: Brand.mint, fontSize: 13)),
             const SizedBox(height: 16),
 
@@ -116,6 +118,8 @@ class _MarketScreenState extends State<MarketScreen> {
             ),
             const SizedBox(height: 20),
 
+            const MarketPulse(),
+            const SizedBox(height: 20),
             const Text('LIVE INDICES',
                 style: TextStyle(
                     color: Brand.gold,
@@ -134,6 +138,8 @@ class _MarketScreenState extends State<MarketScreen> {
               _errorCard()
             else
               ..._indices.map((i) => _indexCard(i as Map<String, dynamic>)),
+            const SizedBox(height: 20),
+            const MarketMovers(),
           ],
         ),
       ),
