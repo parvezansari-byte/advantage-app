@@ -6,6 +6,7 @@ import '../main.dart';
 import '../services/api_service.dart';
 import 'market_mood_screen.dart';
 import 'market_intelligence_screen.dart';
+import 'index_chart_screen.dart';
 import '../widgets/market_movers.dart';
 import '../widgets/market_pulse.dart';
 
@@ -146,6 +147,14 @@ class _MarketScreenState extends State<MarketScreen> {
     );
   }
 
+  void _openChart(Map<String, dynamic> idx) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => IndexChartScreen(name: (idx['name'] ?? '').toString())),
+    );
+  }
+
   Widget _indexCard(Map<String, dynamic> idx) {
     final value = idx['value'] ?? 0;
     final change = (idx['change'] ?? 0) as num;
@@ -155,7 +164,10 @@ class _MarketScreenState extends State<MarketScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openChart(idx),
+        child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
@@ -216,6 +228,7 @@ class _MarketScreenState extends State<MarketScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
