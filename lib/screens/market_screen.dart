@@ -6,6 +6,7 @@ import '../main.dart';
 import '../services/api_service.dart';
 import 'market_mood_screen.dart';
 import 'market_intelligence_screen.dart';
+import '../widgets/sector_strip.dart';
 import 'index_chart_screen.dart';
 import '../widgets/market_movers.dart';
 import '../widgets/market_pulse.dart';
@@ -121,6 +122,8 @@ class _MarketScreenState extends State<MarketScreen> {
 
             const MarketPulse(),
             const SizedBox(height: 20),
+            const SectorStrip(),
+            const SizedBox(height: 12),
             const Text('LIVE INDICES',
                 style: TextStyle(
                     color: Brand.gold,
