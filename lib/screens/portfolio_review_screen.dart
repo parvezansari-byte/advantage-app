@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart';
 import '../services/portfolio_review_service.dart';
+import 'fund_compare_screen.dart';
 
 String _inr(num v) {
   final n = v.round();
@@ -214,6 +215,12 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
         actions: [
           if (_rows.isNotEmpty)
             IconButton(tooltip: 'Clear all', icon: const Icon(Icons.delete_outline), onPressed: _clear),
+          IconButton(
+            tooltip: 'Compare funds',
+            icon: const Icon(Icons.compare_arrows),
+            onPressed: () =>
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const FundCompareScreen())),
+          ),
         ],
       ),
       body: ListView(
@@ -488,6 +495,20 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
               style: const TextStyle(color: Brand.mint, fontSize: 10.5)),
         if (h['plan_note'] != null)
           Text('${h['plan_note']}', style: const TextStyle(color: Brand.mint, fontSize: 10.5)),
+        if (v == 'Behind' && matched)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 30)),
+              onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => FundCompareScreen(initial: ['${h['matched_name']}']))),
+              icon: const Icon(Icons.compare_arrows, size: 16, color: Brand.gold),
+              label: const Text('Compare with alternatives',
+                  style: TextStyle(color: Brand.gold, fontSize: 12)),
+            ),
+          ),
         for (final f in flags)
           Padding(
             padding: const EdgeInsets.only(top: 3),

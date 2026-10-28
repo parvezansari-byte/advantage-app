@@ -91,4 +91,13 @@ class PortfolioReviewService {
     if (r.statusCode != 200) throw Exception(_err(r));
     return r.bodyBytes;
   }
+
+  static Future<Map<String, dynamic>> compare(List<String> names) async {
+    final r = await http
+        .post(Uri.parse('${ApiService.baseUrl}/portfolio/compare'),
+            headers: _json, body: jsonEncode({'names': names}))
+        .timeout(const Duration(seconds: 60));
+    if (r.statusCode != 200) throw Exception(_err(r));
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
 }
