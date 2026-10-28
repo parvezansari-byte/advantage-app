@@ -96,9 +96,35 @@ class _HoldingsTab extends StatefulWidget {
 }
 
 class _HoldingsTabState extends State<_HoldingsTab> {
-  List<Map<String, dynamic>> _holdings = [];
+  List<Map<String, dynamic>> _rows = [];
+  Map<String, dynamic>? _totals;
+  List<String> _notes = [];
+  String? _asOf;
   bool _loading = true;
   String? _error;
+
+  static String _inr(num v) {
+    final n = v.round();
+    final s = n.abs().toString();
+    String out;
+    if (s.length <= 3) {
+      out = s;
+    } else {
+      var rest = s.substring(0, s.length - 3);
+      final parts = <String>[];
+      while (rest.length > 2) {
+        parts.insert(0, rest.substring(rest.length - 2));
+        rest = rest.substring(0, rest.length - 2);
+      }
+      if (rest.isNotEmpty) parts.insert(0, rest);
+      out = '${parts.join(',')},${s.substring(s.length - 3)}';
+    }
+    return '${n < 0 ? '-' : ''}\u20b9$out';
+  }
+
+  static String _signed(num v) => '${v >= 0 ? '+' : '-'}${_inr(v.abs())}';
+  static String _pc(num? v) => v == null ? '-' : '${v >= 0 ? '+' : ''}${v.toStringAsFixed(2)}%';
+  static Color _col(num? v) => v == null ? Brand.mint : (v >= 0 ? Brand.green : Brand.red);
 
   @override
   void initState() {
@@ -112,24 +138,82 @@ class _HoldingsTabState extends State<_HoldingsTab> {
       _error = null;
     });
     try {
-      final h = await TradingApiService.getHoldings(widget.userEmail);
-      setState(() {
-        _holdings = h;
-        _loading = false;
-      });
+      try {
+        final p = await TradingApiService.getPortfolio(widget.userEmail);
+        _rows = (p['holdings'] as List? ?? []).cast<Map<String, dynamic>>();
+        _totals = (p['totals'] as Map?)?.cast<String, dynamic>();
+        _notes = (p['notes'] as List? ?? []).map((e) => '$e').toList();
+        _asOf = p['as_of'] as String?;
+      } catch (_) {
+        // Older server without the valued portfolio: show plain holdings, no prices.
+        final h = await TradingApiService.getHoldings(widget.userEmail);
+        _rows = h
+            .map((e) => <String, dynamic>{
+                  'symbol': (e['tradingSymbol'] ?? e['trading_symbol'] ?? '').toString(),
+                  'qty': double.tryParse('${e['totalQty'] ?? e['quantity'] ?? 0}') ?? 0,
+                  'avg_price': double.tryParse('${e['avgCostPrice'] ?? e['average_price'] ?? 0}') ?? 0,
+                })
+            .toList();
+        _totals = null;
+        _notes = ['Prices are not available from the server yet, so only quantity and average cost are shown.'];
+        _asOf = null;
+      }
+      if (mounted) setState(() => _loading = false);
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
     }
   }
+
+  Widget _summary() {
+    final t = _totals!;
+    final pnl = (t['pnl'] as num?) ?? 0;
+    final day = (t['day_change'] as num?) ?? 0;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Brand.fern,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Brand.gold.withValues(alpha: 0.3)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: _stat('Current value', _inr(t['value'] as num))),
+          Expanded(child: _stat('Invested', _inr(t['priced_invested'] as num))),
+        ]),
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(
+              child: _stat('Total profit / loss', '${_signed(pnl)} (${_pc(t['pnl_pct'] as num?)})',
+                  color: _col(pnl))),
+          Expanded(
+              child: _stat('Today', '${_signed(day)} (${_pc(t['day_change_pct'] as num?)})', color: _col(day))),
+        ]),
+        if (_asOf != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text('As on $_asOf', style: const TextStyle(color: Brand.mint, fontSize: 11)),
+          ),
+      ]),
+    );
+  }
+
+  Widget _stat(String label, String value, {Color color = Brand.paper}) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(color: Brand.mint, fontSize: 11)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w600)),
+      ]);
 
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator(color: Brand.gold));
     if (_error != null) return _ErrorBox(message: _error!, onRetry: _load);
-    if (_holdings.isEmpty) {
+    if (_rows.isEmpty) {
       return RefreshIndicator(
         onRefresh: _load,
         color: Brand.gold,
@@ -140,7 +224,8 @@ class _HoldingsTabState extends State<_HoldingsTab> {
             SizedBox(height: 60),
             Icon(Icons.inventory_2_outlined, color: Brand.mint, size: 48),
             SizedBox(height: 12),
-            Text('No holdings yet', textAlign: TextAlign.center,
+            Text('No holdings yet',
+                textAlign: TextAlign.center,
                 style: TextStyle(color: Brand.paper, fontWeight: FontWeight.bold, fontSize: 16)),
           ],
         ),
@@ -150,48 +235,84 @@ class _HoldingsTabState extends State<_HoldingsTab> {
       onRefresh: _load,
       color: Brand.gold,
       backgroundColor: Brand.fern,
-      child: ListView.separated(
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        itemCount: _holdings.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, i) {
-          final h = _holdings[i];
-          final symbol = (h['tradingSymbol'] ?? h['trading_symbol'] ?? '').toString();
-          final qty = double.tryParse('${h['totalQty'] ?? h['quantity'] ?? 0}') ?? 0;
-          final avg = double.tryParse('${h['avgCostPrice'] ?? h['average_price'] ?? 0}') ?? 0;
-          return Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Brand.fern,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Brand.gold.withValues(alpha: 0.2)),
+        children: [
+          if (_totals != null) ...[_summary(), const SizedBox(height: 12)],
+          for (final h in _rows) ...[_holdingCard(h), const SizedBox(height: 8)],
+          for (final n in _notes)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(n, style: const TextStyle(color: Brand.mint, fontSize: 11)),
             ),
-            child: Row(
+        ],
+      ),
+    );
+  }
+
+  Widget _holdingCard(Map<String, dynamic> h) {
+    final symbol = '${h['symbol']}';
+    final qty = (h['qty'] as num?) ?? 0;
+    final qtyTxt = qty == qty.roundToDouble() ? qty.toInt().toString() : qty.toString();
+    final price = h['price'] as num?;
+    final pnl = h['pnl'] as num?;
+    final day = h['day_change'] as num?;
+    final weight = h['weight_pct'] as num?;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Brand.fern,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Brand.gold.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(symbol, style: const TextStyle(
-                          color: Brand.paper, fontWeight: FontWeight.bold, fontSize: 15)),
-                      const SizedBox(height: 2),
-                      Text('$qty units @ avg ₹$avg',
-                          style: const TextStyle(color: Brand.mint, fontSize: 12)),
-                    ],
+                Row(children: [
+                  Text(symbol,
+                      style: const TextStyle(color: Brand.paper, fontWeight: FontWeight.bold, fontSize: 15)),
+                  if (weight != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: Text('${weight.toStringAsFixed(1)}%',
+                          style: const TextStyle(color: Brand.mint, fontSize: 11)),
+                    ),
+                ]),
+                const SizedBox(height: 2),
+                Text('$qtyTxt units @ avg \u20b9${((h['avg_price'] as num?) ?? 0).toStringAsFixed(2)}',
+                    style: const TextStyle(color: Brand.mint, fontSize: 12)),
+                if (price != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                      '\u20b9${price.toStringAsFixed(2)}'
+                      '${h['realtime'] == true ? '' : ' (close)'}'
+                      '${day == null ? '' : '   today ${_signed(day)}'}',
+                      style: TextStyle(color: _col(day), fontSize: 12)),
+                  Text('Value ${_inr(h['value'] as num)}   P&L ${_signed(pnl ?? 0)} (${_pc(h['pnl_pct'] as num?)})',
+                      style: TextStyle(color: _col(pnl), fontSize: 12)),
+                ] else
+                  const Padding(
+                    padding: EdgeInsets.only(top: 4),
+                    child: Text('No price available', style: TextStyle(color: Brand.mint, fontSize: 11.5)),
                   ),
-                ),
-                TextButton(
-                  onPressed: () => widget.onTrade(prefillSymbol: symbol, transactionType: 'SELL'),
-                  child: const Text('Sell', style: TextStyle(color: Brand.red)),
-                ),
-                TextButton(
-                  onPressed: () => widget.onTrade(prefillSymbol: symbol, transactionType: 'BUY'),
-                  child: const Text('Buy', style: TextStyle(color: Brand.green)),
-                ),
               ],
             ),
-          );
-        },
+          ),
+          Column(mainAxisSize: MainAxisSize.min, children: [
+            TextButton(
+              onPressed: () => widget.onTrade(prefillSymbol: symbol, transactionType: 'SELL'),
+              child: const Text('Sell', style: TextStyle(color: Brand.red)),
+            ),
+            TextButton(
+              onPressed: () => widget.onTrade(prefillSymbol: symbol, transactionType: 'BUY'),
+              child: const Text('Buy', style: TextStyle(color: Brand.green)),
+            ),
+          ]),
+        ],
       ),
     );
   }

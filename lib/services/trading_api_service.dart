@@ -43,6 +43,12 @@ class TradingApiService {
     return list.cast<Map<String, dynamic>>();
   }
 
+  /// Holdings valued at the latest price, with profit/loss and today's change.
+  static Future<Map<String, dynamic>> getPortfolio(String ownerEmail) async {
+    final res = await http.get(Uri.parse('$_base/trading/$ownerEmail/portfolio'));
+    return _decodeObj(res);
+  }
+
   static Future<List<Map<String, dynamic>>> getPositions(String ownerEmail) async {
     final res = await http.get(Uri.parse('$_base/trading/$ownerEmail/positions'));
     final body = _decodeObj(res);
