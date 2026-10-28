@@ -122,19 +122,14 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
       _info = null;
     });
     try {
-      final pick = await FilePicker.platform.pickFiles(
+      final f = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: const ['xlsx', 'csv'],
-        withData: true,
       );
-      if (pick == null || pick.files.isEmpty) return;
-      final f = pick.files.first;
-      if (f.bytes == null) {
-        setState(() => _error = 'Could not read that file.');
-        return;
-      }
+      if (f == null) return;
       setState(() => _busy = true);
-      final res = await PortfolioReviewService.parse(f.name, f.bytes!);
+      final bytes = await f.readAsBytes();
+      final res = await PortfolioReviewService.parse(f.name, bytes);
       final rows = (res['rows'] as List).map((e) => PfRow.fromJson(e as Map<String, dynamic>)).toList();
       _rows.addAll(rows);
       final warn = (res['warnings'] as List).map((e) => '$e').toList();
