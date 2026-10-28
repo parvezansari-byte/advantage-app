@@ -14,6 +14,7 @@ import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_holdings_tab.dart';
 import 'crm_orders_tab.dart';
+import 'crm_tax_screen.dart';
 
 const _months = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -113,6 +114,14 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
         title: Text(_client.fullName,
             style: const TextStyle(color: Brand.gold, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+              tooltip: 'Capital gains estimate',
+              icon: const Icon(Icons.receipt_long_outlined, color: Brand.gold),
+              onPressed: () => Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => CrmTaxScreen(
+                      ownerEmail: widget.ownerEmail,
+                      clientId: _client.id!,
+                      clientName: _client.fullName)))),
           IconButton(
               icon: const Icon(Icons.edit_outlined, color: Brand.mint),
               onPressed: _edit),
