@@ -60,4 +60,13 @@ class PortfolioReviewService {
     if (r.statusCode != 200) throw Exception(_err(r));
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
+
+  static Future<Uint8List> pdf(List<PfRow> rows) async {
+    final r = await http
+        .post(Uri.parse('${ApiService.baseUrl}/portfolio/pdf'),
+            headers: _json, body: jsonEncode({'holdings': rows.map((e) => e.toJson()).toList()}))
+        .timeout(const Duration(seconds: 90));
+    if (r.statusCode != 200) throw Exception(_err(r));
+    return r.bodyBytes;
+  }
 }

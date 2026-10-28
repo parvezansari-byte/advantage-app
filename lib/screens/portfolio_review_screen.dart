@@ -11,6 +11,7 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart';
@@ -67,6 +68,7 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
   final List<PfRow> _rows = [];
   Map<String, dynamic>? _result;
   bool _busy = false;
+  bool _pdfBusy = false;
   String? _error;
   String? _info;
 
@@ -155,6 +157,21 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
       if (mounted) setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pdf() async {
+    setState(() {
+      _pdfBusy = true;
+      _error = null;
+    });
+    try {
+      final bytes = await PortfolioReviewService.pdf(_rows);
+      await Printing.sharePdf(bytes: bytes, filename: 'advantage_portfolio_review.pdf');
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _pdfBusy = false);
     }
   }
 
@@ -288,8 +305,19 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
 
     return [
       const SizedBox(height: 22),
-      Text('Review as on ${r['as_of']}',
-          style: const TextStyle(color: Brand.gold, fontWeight: FontWeight.w700, letterSpacing: .6)),
+      Row(children: [
+        Expanded(
+          child: Text('Review as on ${r['as_of']}',
+              style: const TextStyle(color: Brand.gold, fontWeight: FontWeight.w700, letterSpacing: .6)),
+        ),
+        TextButton.icon(
+          onPressed: _pdfBusy ? null : _pdf,
+          icon: _pdfBusy
+              ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.picture_as_pdf, color: Brand.gold, size: 18),
+          label: const Text('PDF', style: TextStyle(color: Brand.gold)),
+        ),
+      ]),
       const SizedBox(height: 8),
       Container(
         padding: const EdgeInsets.all(14),
