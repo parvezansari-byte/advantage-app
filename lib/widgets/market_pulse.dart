@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../main.dart';
+import '../screens/index_stocks_screen.dart';
 import '../services/api_service.dart';
 
 class MarketPulse extends StatefulWidget {
@@ -237,7 +238,7 @@ class _MarketPulseState extends State<MarketPulse> {
       children: [
         _head('MARKET BREADTH', _stale ? 'delayed' : _asOf),
         const SizedBox(height: 4),
-        Text('Stocks rising vs falling today',
+        Text('Stocks rising vs falling today \u00b7 tap to see the stocks',
             style: TextStyle(
                 color: Brand.mint.withValues(alpha: 0.7), fontSize: 11)),
         const SizedBox(height: 10),
@@ -246,40 +247,75 @@ class _MarketPulseState extends State<MarketPulse> {
     ));
   }
 
+  void _open(_Breadth b, String filter) => Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (_) => IndexStocksScreen(
+                index: b.name.toUpperCase(), initialFilter: filter)),
+      );
+
   Widget _breadthRow(_Breadth b) {
     final total = b.total == 0 ? 1 : b.total;
     final upPct = (100 * b.up / total).round();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Expanded(
-              child: Text(b.name,
-                  style: const TextStyle(color: Brand.paper, fontSize: 12.5)),
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => _open(b, 'all'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text(b.name,
+                    style: const TextStyle(color: Brand.paper, fontSize: 12.5)),
+              ),
+              GestureDetector(
+                onTap: () => _open(b, 'up'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                  child: Text('${b.up} up',
+                      style: const TextStyle(
+                          color: Brand.green,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ),
+              const Text('\u00b7', style: TextStyle(color: Brand.mint, fontSize: 11)),
+              GestureDetector(
+                onTap: () => _open(b, 'down'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+                  child: Text('${b.down} down',
+                      style: const TextStyle(
+                          color: Brand.red,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ),
+              Text('\u00b7 $upPct% rising',
+                  style: const TextStyle(color: Brand.mint, fontSize: 11)),
+              const Icon(Icons.chevron_right, size: 16, color: Brand.mint),
+            ]),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: SizedBox(
+                height: 6,
+                child: Row(children: [
+                  if (b.up > 0)
+                    Expanded(flex: b.up, child: Container(color: Brand.green)),
+                  if (b.flat > 0)
+                    Expanded(
+                        flex: b.flat,
+                        child: Container(color: Colors.grey.shade600)),
+                  if (b.down > 0)
+                    Expanded(flex: b.down, child: Container(color: Brand.red)),
+                ]),
+              ),
             ),
-            Text('${b.up} up  \u00b7  ${b.down} down  \u00b7  $upPct% rising',
-                style: const TextStyle(color: Brand.mint, fontSize: 11)),
-          ]),
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(3),
-            child: SizedBox(
-              height: 6,
-              child: Row(children: [
-                if (b.up > 0)
-                  Expanded(flex: b.up, child: Container(color: Brand.green)),
-                if (b.flat > 0)
-                  Expanded(
-                      flex: b.flat,
-                      child: Container(color: Colors.grey.shade600)),
-                if (b.down > 0)
-                  Expanded(flex: b.down, child: Container(color: Brand.red)),
-              ]),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

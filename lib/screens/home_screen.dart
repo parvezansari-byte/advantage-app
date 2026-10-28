@@ -1,6 +1,7 @@
 // lib/screens/home_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
@@ -463,6 +464,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       MaterialPageRoute(builder: (_) => SmsTrackingScreen(userEmail: email)));
                 },
               ),
+              // CRM_LINK_PATCH: visible only to this sign-in
+              if ((AuthService.email ?? '').trim().toLowerCase() ==
+                  'parvez.ansari@wealthy.in')
+                _MenuCard(
+                  icon: Icons.dashboard_customize_outlined,
+                  iconColor: Brand.gold,
+                  title: 'CRM Dashboard',
+                  subtitle: 'Open crm.buildwealth.in in your browser',
+                  onTap: () async {
+                    final ok = await launchUrl(
+                        Uri.parse('https://crm.buildwealth.in/dashboards/email-login'),
+                        mode: LaunchMode.externalApplication);
+                    if (!ok && context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Could not open the link')),
+                      );
+                    }
+                  },
+                ),
               const SizedBox(height: 24),
 
               const Text('POPULAR',

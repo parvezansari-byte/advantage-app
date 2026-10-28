@@ -28,8 +28,9 @@ class _MarketMoversState extends State<MarketMovers> {
   static const _indices = {
     'Nifty 500': 'NIFTY 500',
     'Nifty 50': 'NIFTY 50',
-    'Midcap': 'NIFTY MIDCAP 100',
-    'Smallcap': 'NIFTY SMALLCAP 100',
+    'Next 50': 'NIFTY NEXT 50',
+    'Midcap 150': 'NIFTY MIDCAP 150',
+    'Smallcap 250': 'NIFTY SMALLCAP 250',
   };
 
   String _label = 'Nifty 500';
@@ -38,8 +39,10 @@ class _MarketMoversState extends State<MarketMovers> {
   List<_Mover> _down = [];
   String _asOf = '';
   bool _stale = false;
+  String _note = '';
   bool _loading = true;
   bool _failed = false;
+  String _errorText = '';
   int _requestId = 0;
   Timer? _timer;
 
@@ -74,7 +77,13 @@ class _MarketMoversState extends State<MarketMovers> {
       final r = await http
           .get(Uri.parse('${ApiService.baseUrl}/market/movers?index=$idx&n=10'))
           .timeout(const Duration(seconds: 45));
-      if (r.statusCode != 200) throw Exception('status ${r.statusCode}');
+      if (r.statusCode != 200) {
+        var why = 'status ${r.statusCode}';
+        try {
+          why = '${(jsonDecode(r.body) as Map)['detail'] ?? why}';
+        } catch (_) {}
+        throw Exception(why);
+      }
       final d = jsonDecode(r.body) as Map<String, dynamic>;
       if (!mounted || id != _requestId) return;
       setState(() {
@@ -82,11 +91,15 @@ class _MarketMoversState extends State<MarketMovers> {
         _down = _rows(d['losers']);
         _asOf = '${d['as_of'] ?? ''}';
         _stale = d['stale'] == true;
+        _note = '${d['note'] ?? ''}';
         _failed = false;
       });
-    } catch (_) {
+    } catch (e) {
       if (mounted && id == _requestId) {
-        setState(() => _failed = _up.isEmpty && _down.isEmpty);
+        setState(() {
+          _failed = _up.isEmpty && _down.isEmpty;
+          _errorText = '$e'.replaceFirst('Exception: ', '');
+        });
       }
     } finally {
       if (mounted && id == _requestId) setState(() => _loading = false);
@@ -95,7 +108,39 @@ class _MarketMoversState extends State<MarketMovers> {
 
   @override
   Widget build(BuildContext context) {
-    if (_failed) return const SizedBox.shrink();
+    if (_failed) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Brand.fern.withValues(alpha: 0.28),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('TOP MOVERS',
+                style: TextStyle(
+                    color: Brand.gold,
+                    fontSize: 12,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(_errorText.isEmpty ? 'Could not load top movers.' : _errorText,
+                style: const TextStyle(color: Brand.mint, fontSize: 12)),
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () {
+                setState(() => _failed = false);
+                _load();
+              },
+              child: const Text('Retry',
+                  style: TextStyle(color: Brand.gold, fontSize: 12)),
+            ),
+          ],
+        ),
+      );
+    }
     final rows = _gainers ? _up : _down;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,6 +159,12 @@ class _MarketMoversState extends State<MarketMovers> {
                     color: Brand.mint.withValues(alpha: 0.6), fontSize: 11)),
           ],
         ),
+        if (_note.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(_note,
+                style: const TextStyle(color: Brand.gold, fontSize: 10.5)),
+          ),
         const SizedBox(height: 10),
         Wrap(spacing: 6, runSpacing: 6, children: [
           for (final l in _indices.keys)
