@@ -12,6 +12,7 @@ import '../models/crm_client.dart';
 import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_client_detail_screen.dart';
+import 'crm_watch_screen.dart';
 
 class CrmClientListScreen extends StatefulWidget {
   final String ownerEmail;
@@ -88,6 +89,12 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
         title: const Text('Clients',
             style: TextStyle(color: Brand.gold, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            tooltip: 'Review watch: funds behind benchmark',
+            icon: const Icon(Icons.notifications_active_outlined, color: Brand.gold),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => CrmWatchScreen(ownerEmail: widget.ownerEmail))),
+          ),
           IconButton(
             tooltip: 'Refresh',
             icon: const Icon(Icons.refresh, color: Brand.mint),
