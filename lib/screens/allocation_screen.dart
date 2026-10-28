@@ -99,6 +99,8 @@ class _AllocationScreenState extends State<AllocationScreen> {
   String? _pdfError;
   bool _loading = true;
   bool _pdfBusy = false;
+  String _lookTab = 'stocks';
+  bool _lookAll = false;
   int _requestId = 0;
   Timer? _debounce;
 
@@ -715,6 +717,8 @@ class _AllocationScreenState extends State<AllocationScreen> {
           ]),
         ],
       )),
+      if (p.milestones.isNotEmpty) _milestonesBox(p),
+      if (p.look != null && !p.look!.isEmpty) _lookBox(p, sipWord),
       SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
@@ -752,6 +756,126 @@ class _AllocationScreenState extends State<AllocationScreen> {
         ],
       )),
     ];
+  }
+
+  Widget _milestonesBox(AllocPlan p) {
+    return _box(Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label('INVESTED VS EXPECTED VALUE'),
+        const SizedBox(height: 8),
+        for (final m in p.milestones)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Brand.vault.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('After ${m.year} years',
+                  style: const TextStyle(color: Brand.gold, fontWeight: FontWeight.w700, fontSize: 12.5)),
+              const SizedBox(height: 4),
+              Row(children: [
+                Expanded(child: _mStat('Invested', _inrShort(m.invested), Brand.mint)),
+                Expanded(child: _mStat('Expected', _inrShort(m.base), Brand.paper)),
+                Expanded(child: _mStat('Gain', '${m.gain >= 0 ? '+' : ''}${_inrShort(m.gain)}', Brand.green)),
+              ]),
+              const SizedBox(height: 2),
+              Text('Likely range ${_inrShort(m.low)} to ${_inrShort(m.high)}',
+                  style: const TextStyle(color: Brand.mint, fontSize: 11)),
+            ]),
+          ),
+      ],
+    ));
+  }
+
+  Widget _mStat(String label, String value, Color color) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(color: Brand.mint, fontSize: 10.5)),
+        Text(value, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
+      ]);
+
+  Widget _lookBox(AllocPlan p, String sipWord) {
+    final l = p.look!;
+    final stocks = _lookTab == 'stocks';
+    final bonds = _lookTab == 'bonds';
+    final holdings = stocks ? l.stocks : l.bonds;
+    final shown = _lookAll ? holdings.length : (holdings.length > 10 ? 10 : holdings.length);
+    return _box(Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label('WHAT THE FUNDS HOLD'),
+        const SizedBox(height: 4),
+        Text(
+            'Your plan covers ${l.coveredPct.toStringAsFixed(0)}% by holdings data'
+            '${l.asOn.isEmpty ? '' : ' (as on ${l.asOn})'}. '
+            'Stocks ${l.stocksTotal.toStringAsFixed(1)}%, bonds ${l.bondsTotal.toStringAsFixed(1)}% of the plan.',
+            style: const TextStyle(color: Brand.mint, fontSize: 11.5)),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, children: [
+          _chip('Stocks', stocks, () => setState(() {
+                _lookTab = 'stocks';
+                _lookAll = false;
+              })),
+          _chip('Bonds', bonds, () => setState(() {
+                _lookTab = 'bonds';
+                _lookAll = false;
+              })),
+          _chip('Sectors', _lookTab == 'sectors', () => setState(() {
+                _lookTab = 'sectors';
+                _lookAll = false;
+              })),
+        ]),
+        const SizedBox(height: 8),
+        if (_lookTab == 'sectors')
+          ...l.sectors.take(12).map((s) => _lookRow(s.key, '', s.value, null, sipWord))
+        else ...[
+          if (holdings.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text('No holdings data for the chosen funds in this view.',
+                  style: TextStyle(color: Brand.mint, fontSize: 12)),
+            ),
+          for (final h in holdings.take(shown)) _lookRow(h.name, h.sub, h.pct, h.amount, sipWord),
+          if (holdings.length > 10)
+            TextButton(
+              onPressed: () => setState(() => _lookAll = !_lookAll),
+              child: Text(_lookAll ? 'Show fewer' : 'Show all ${holdings.length}',
+                  style: const TextStyle(color: Brand.gold)),
+            ),
+        ],
+        if (l.without.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+                'No holdings data for: ${l.without.map((n) => n.split(' - ').first).join(', ')}.',
+                style: const TextStyle(color: Brand.mint, fontSize: 10.5)),
+          ),
+      ],
+    ));
+  }
+
+  Widget _lookRow(String name, String sub, double pct, int? amount, String sipWord) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Brand.paper, fontSize: 12.5)),
+            if (sub.isNotEmpty)
+              Text(sub, style: const TextStyle(color: Brand.mint, fontSize: 10.5)),
+          ]),
+        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text('${pct.toStringAsFixed(2)}%',
+              style: const TextStyle(color: Brand.gold, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          if (amount != null)
+            Text('${_inrFull(amount)}$sipWord', style: const TextStyle(color: Brand.mint, fontSize: 10.5)),
+        ]),
+      ]),
+    );
   }
 
   List<Widget> _classBlock(AllocClass c, String sipWord) {

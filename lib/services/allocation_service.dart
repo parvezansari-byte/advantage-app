@@ -116,6 +116,8 @@ class AllocPlan {
   final List<AllocPoint> points;
   final double invested, low, base, high;
   final List<String> notes;
+  final List<AllocMilestone> milestones;
+  final AllocLook? look;
   const AllocPlan({
     required this.mode,
     required this.risk,
@@ -135,6 +137,8 @@ class AllocPlan {
     required this.base,
     required this.high,
     required this.notes,
+    this.milestones = const [],
+    this.look,
   });
 
   AllocClass? classOf(String key) {
@@ -187,8 +191,78 @@ class AllocPlan {
       base: _d(sum['base']) ?? 0,
       high: _d(sum['high']) ?? 0,
       notes: ((j['notes'] as List?) ?? []).map((e) => '$e').toList(),
+      milestones: ((j['milestones'] as List?) ?? [])
+          .whereType<Map>()
+          .map((e) => AllocMilestone(
+                (e['year'] as num).toInt(),
+                (e['invested'] as num).toDouble(),
+                (e['low'] as num).toDouble(),
+                (e['base'] as num).toDouble(),
+                (e['high'] as num).toDouble(),
+                (e['gain'] as num).toDouble(),
+              ))
+          .toList(),
+      look: j['look_through'] is Map
+          ? AllocLook.fromJson(Map<String, dynamic>.from(j['look_through'] as Map))
+          : null,
     );
   }
+}
+
+/// Value of the plan at a milestone year (5, 10, 15, 20).
+class AllocMilestone {
+  final int year;
+  final double invested, low, base, high, gain;
+  const AllocMilestone(this.year, this.invested, this.low, this.base, this.high, this.gain);
+}
+
+/// One stock or bond issuer inside the chosen funds. [sub] is the sector or the rating.
+class AllocHolding {
+  final String name, sub;
+  final double pct;
+  final int amount;
+  const AllocHolding(this.name, this.sub, this.pct, this.amount);
+}
+
+/// What the chosen funds hold underneath: stocks, bond issuers and sectors.
+class AllocLook {
+  final List<AllocHolding> stocks, bonds;
+  final List<MapEntry<String, double>> sectors;
+  final double stocksTotal, bondsTotal, coveredPct;
+  final List<String> without;
+  final String asOn;
+  const AllocLook({
+    required this.stocks,
+    required this.bonds,
+    required this.sectors,
+    required this.stocksTotal,
+    required this.bondsTotal,
+    required this.coveredPct,
+    required this.without,
+    required this.asOn,
+  });
+
+  bool get isEmpty => stocks.isEmpty && bonds.isEmpty;
+
+  static List<AllocHolding> _list(dynamic v, String subKey) => ((v as List?) ?? [])
+      .whereType<Map>()
+      .map((e) => AllocHolding('${e['name']}', '${e[subKey] ?? ''}', _d(e['pct']) ?? 0,
+          ((e['amount'] as num?) ?? 0).round()))
+      .toList();
+
+  factory AllocLook.fromJson(Map<String, dynamic> j) => AllocLook(
+        stocks: _list(j['stocks'], 'sector'),
+        bonds: _list(j['bonds'], 'rating'),
+        sectors: ((j['sectors'] as List?) ?? [])
+            .whereType<Map>()
+            .map((e) => MapEntry('${e['sector']}', _d(e['pct']) ?? 0))
+            .toList(),
+        stocksTotal: _d(j['stocks_total']) ?? 0,
+        bondsTotal: _d(j['bonds_total']) ?? 0,
+        coveredPct: _d(j['covered_pct']) ?? 0,
+        without: ((j['without'] as List?) ?? []).map((e) => '$e').toList(),
+        asOn: '${j['as_on'] ?? ''}',
+      );
 }
 
 /// class key -> category -> funds
