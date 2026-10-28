@@ -230,7 +230,8 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
           Text(
             widget.hint ??
                 'Add your funds by hand or upload an Excel / CSV with columns: Fund name, Invested value, '
-                    'Current value, Date. We compare each fund with its category and benchmark.',
+                    'Current value, Date. For a SIP, use SIP amount, SIP start date and (optional) SIP end date '
+                    'instead of Invested value and Date. We compare each fund with its category and benchmark.',
             style: const TextStyle(color: Brand.mint, fontSize: 12.5),
           ),
           const SizedBox(height: 12),
