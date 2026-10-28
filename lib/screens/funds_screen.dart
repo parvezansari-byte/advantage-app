@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 import 'allocation_screen.dart';
+import 'portfolio_review_screen.dart';
 
 // ===========================================================================
 // FORMATTING
@@ -190,6 +191,12 @@ class _FundsScreenState extends State<FundsScreen> {
             icon: const Icon(Icons.auto_graph, color: Brand.gold, size: 18),
             label: const Text('Auto allocate',
                 style: TextStyle(color: Brand.gold, fontSize: 12.5)),
+          ),
+          IconButton(
+            tooltip: 'Portfolio review',
+            icon: const Icon(Icons.fact_check_outlined, color: Brand.gold),
+            onPressed: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const PortfolioReviewScreen())),
           ),
           IconButton(
             icon: const Icon(Icons.search, color: Brand.mint),
