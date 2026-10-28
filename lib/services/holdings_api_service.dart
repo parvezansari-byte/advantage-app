@@ -26,6 +26,7 @@ class ManualHolding {
   final double? currentValue;
   final double? gain;
   final double? gainPct;
+  final String? buyDate; // yyyy-mm-dd, average purchase date; null when not recorded
 
   const ManualHolding({
     required this.id,
@@ -40,6 +41,7 @@ class ManualHolding {
     this.currentValue,
     this.gain,
     this.gainPct,
+    this.buyDate,
   });
 
   factory ManualHolding.fromJson(Map<String, dynamic> j) => ManualHolding(
@@ -55,6 +57,9 @@ class ManualHolding {
         currentValue: _num(j['current_value']),
         gain: _num(j['gain']),
         gainPct: _num(j['gain_pct']),
+        buyDate: (j['buy_date'] == null || '${j['buy_date']}'.length < 10)
+            ? null
+            : '${j['buy_date']}'.substring(0, 10),
       );
 }
 
@@ -141,6 +146,7 @@ class HoldingsApiService {
     required double units,
     required double avgNav,
     String? folioNumber,
+    String? buyDate,
   }) async {
     final res = await http
         .post(
@@ -152,6 +158,7 @@ class HoldingsApiService {
             'units': units,
             'avg_nav': avgNav,
             'folio_number': folioNumber,
+            if (buyDate != null) 'buy_date': buyDate,
           }),
         )
         .timeout(_timeout);
@@ -164,6 +171,8 @@ class HoldingsApiService {
     required double units,
     required double avgNav,
     String? folioNumber,
+    String? buyDate,
+    bool clearBuyDate = false,
   }) async {
     final res = await http
         .put(
@@ -173,6 +182,8 @@ class HoldingsApiService {
             'units': units,
             'avg_nav': avgNav,
             'folio_number': folioNumber ?? '',
+            if (buyDate != null) 'buy_date': buyDate,
+            if (clearBuyDate) 'clear_buy_date': true,
           }),
         )
         .timeout(_timeout);

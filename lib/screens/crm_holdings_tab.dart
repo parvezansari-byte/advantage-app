@@ -182,6 +182,7 @@ class _CrmHoldingsTabState extends State<CrmHoldingsTab> {
                   const SizedBox(height: 3),
                   Text(
                     '${formatUnits(h.units)} units · avg NAV ₹${h.avgNav.toStringAsFixed(2)}'
+                    '${h.buyDate == null ? '' : ' · Bought ${h.buyDate!.substring(8, 10)}-${h.buyDate!.substring(5, 7)}-${h.buyDate!.substring(0, 4)}'}'
                     '${h.folioNumber.isEmpty ? '' : ' · Folio ${h.folioNumber}'}',
                     style: const TextStyle(color: Brand.mint, fontSize: 11),
                   ),
@@ -359,7 +360,7 @@ class _CrmHoldingsTabState extends State<CrmHoldingsTab> {
                         name: h.schemeName,
                         invested: h.invested,
                         current: h.currentValue!,
-                        date: null))
+                        date: h.buyDate))
                     .toList();
                 if (rows.isEmpty) return;
                 Navigator.push(
@@ -368,9 +369,9 @@ class _CrmHoldingsTabState extends State<CrmHoldingsTab> {
                         builder: (_) => PortfolioReviewScreen(
                               initialRows: rows,
                               title: '${widget.client.fullName} - review',
-                              hint: 'Recorded holdings are loaded. Dates are not stored, so tap a fund '
-                                  'and add its purchase date to compare yearly returns with the '
-                                  'benchmark. Without a date you see total return only.',
+                              hint: 'Recorded holdings are loaded. Funds with a purchase date show yearly '
+                                  'returns against the benchmark. For the rest, tap the fund and add a date, '
+                                  'or add it on the holding itself.',
                             )));
               },
               icon: const Icon(Icons.fact_check_outlined, color: Brand.gold),

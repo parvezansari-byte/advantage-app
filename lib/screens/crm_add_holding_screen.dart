@@ -34,6 +34,7 @@ class _CrmAddHoldingScreenState extends State<CrmAddHoldingScreen> {
   final _units = TextEditingController();
   final _nav = TextEditingController();
   final _folio = TextEditingController();
+  DateTime? _buyDate;
   bool _saving = false;
   String? _error;
 
@@ -48,6 +49,7 @@ class _CrmAddHoldingScreenState extends State<CrmAddHoldingScreen> {
       _units.text = formatUnits(e.units);
       _nav.text = e.avgNav.toString();
       _folio.text = e.folioNumber;
+      _buyDate = e.buyDate == null ? null : DateTime.tryParse(e.buyDate!);
     }
   }
 
@@ -57,6 +59,21 @@ class _CrmAddHoldingScreenState extends State<CrmAddHoldingScreen> {
     _nav.dispose();
     _folio.dispose();
     super.dispose();
+  }
+
+  String? _iso(DateTime? d) => d == null
+      ? null
+      : '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final d = await showDatePicker(
+      context: context,
+      initialDate: _buyDate ?? DateTime(now.year - 1, now.month, now.day),
+      firstDate: DateTime(1990),
+      lastDate: now,
+    );
+    if (d != null) setState(() => _buyDate = d);
   }
 
   double? _parse(String s) => double.tryParse(s.replaceAll(',', '').trim());
@@ -85,7 +102,11 @@ class _CrmAddHoldingScreenState extends State<CrmAddHoldingScreen> {
       if (_isEdit) {
         await HoldingsApiService.updateHolding(
             widget.ownerEmail, widget.existing!.id,
-            units: units, avgNav: nav, folioNumber: folio);
+            units: units,
+            avgNav: nav,
+            folioNumber: folio,
+            buyDate: _iso(_buyDate),
+            clearBuyDate: _buyDate == null && widget.existing!.buyDate != null);
       } else {
         await HoldingsApiService.addHolding(
           widget.ownerEmail,
@@ -95,6 +116,7 @@ class _CrmAddHoldingScreenState extends State<CrmAddHoldingScreen> {
           units: units,
           avgNav: nav,
           folioNumber: folio.isEmpty ? null : folio,
+          buyDate: _iso(_buyDate),
         );
       }
       if (mounted) Navigator.pop(context, true);
@@ -257,6 +279,33 @@ class _CrmAddHoldingScreenState extends State<CrmAddHoldingScreen> {
               style: const TextStyle(color: Brand.paper),
               decoration: _dec('Folio number (optional)'),
             ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickDate,
+                  icon: const Icon(Icons.event, color: Brand.gold),
+                  label: Text(
+                      _buyDate == null
+                          ? 'Purchase date (optional)'
+                          : 'Bought ${_buyDate!.day.toString().padLeft(2, '0')}-${_buyDate!.month.toString().padLeft(2, '0')}-${_buyDate!.year}',
+                      style: const TextStyle(color: Brand.gold)),
+                ),
+              ),
+              if (_buyDate != null)
+                IconButton(
+                  tooltip: 'Clear date',
+                  icon: const Icon(Icons.close, color: Brand.mint),
+                  onPressed: () => setState(() => _buyDate = null),
+                ),
+            ]),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'With a date, the portfolio review can compare yearly returns with the benchmark.',
+                style: TextStyle(color: Brand.mint.withValues(alpha: 0.7), fontSize: 11.5),
+              ),
+            ),
             if (invested != null) ...[
               const SizedBox(height: 12),
               Text('Invested value: ${formatInr(invested)}',
@@ -266,7 +315,8 @@ class _CrmAddHoldingScreenState extends State<CrmAddHoldingScreen> {
               const SizedBox(height: 10),
               Text(
                 'If the client already holds this fund, these units are added '
-                'to the existing line and the average NAV is recalculated.',
+                'to the existing line and the average NAV is recalculated. If both '
+                'purchases have dates, the line keeps their average, weighted by amount.',
                 style: TextStyle(
                     color: Brand.mint.withValues(alpha: 0.7),
                     fontSize: 12,
