@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../services/portfolio_review_service.dart';
 import 'fund_compare_screen.dart';
+import 'rebalance_screen.dart';
 
 String _inr(num v) {
   final n = v.round();
@@ -367,6 +368,13 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
       for (final a in (alloc['by_asset'] as List).cast<Map<String, dynamic>>()) _bar(a),
       const SizedBox(height: 6),
       for (final a in (alloc['by_category'] as List).cast<Map<String, dynamic>>()) _bar(a, small: true),
+      const SizedBox(height: 10),
+      OutlinedButton.icon(
+        onPressed: () => Navigator.push(
+            context, MaterialPageRoute(builder: (_) => RebalanceScreen(rows: List<PfRow>.of(_rows)))),
+        icon: const Icon(Icons.balance, color: Brand.gold),
+        label: const Text('Check against a target mix', style: TextStyle(color: Brand.gold)),
+      ),
       const SizedBox(height: 16),
       const Text('FUND BY FUND', style: TextStyle(color: Brand.gold, fontWeight: FontWeight.w700, letterSpacing: .6)),
       const SizedBox(height: 6),

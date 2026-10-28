@@ -100,4 +100,21 @@ class PortfolioReviewService {
     if (r.statusCode != 200) throw Exception(_err(r));
     return jsonDecode(r.body) as Map<String, dynamic>;
   }
+
+  static Future<Map<String, dynamic>> rebalance(List<PfRow> rows,
+      {required String risk, required int years, double newMoney = 0, Map<String, double>? target}) async {
+    final r = await http
+        .post(Uri.parse('${ApiService.baseUrl}/portfolio/rebalance'),
+            headers: _json,
+            body: jsonEncode({
+              'holdings': rows.map((e) => e.toJson()).toList(),
+              'risk': risk,
+              'years': years,
+              'new_money': newMoney,
+              if (target != null) 'target': target,
+            }))
+        .timeout(const Duration(seconds: 60));
+    if (r.statusCode != 200) throw Exception(_err(r));
+    return jsonDecode(r.body) as Map<String, dynamic>;
+  }
 }
