@@ -12,6 +12,8 @@ import '../services/crm_api_service.dart';
 import '../services/holdings_api_service.dart';
 import 'crm_add_holding_screen.dart';
 import 'crm_orders_tab.dart' show formatInr;
+import 'portfolio_review_screen.dart';
+import '../services/portfolio_review_service.dart' show PfRow;
 
 /// Units to up to 3 decimals, without trailing zeros (12.500 -> 12.5).
 String formatUnits(double u) {
@@ -348,6 +350,33 @@ class _CrmHoldingsTabState extends State<CrmHoldingsTab> {
             ),
           if (portfolio.holdings.isNotEmpty) ...[
             _summaryCard(portfolio.totals),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                final rows = portfolio.holdings
+                    .where((h) => h.currentValue != null && h.invested > 0)
+                    .map((h) => PfRow(
+                        name: h.schemeName,
+                        invested: h.invested,
+                        current: h.currentValue!,
+                        date: null))
+                    .toList();
+                if (rows.isEmpty) return;
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => PortfolioReviewScreen(
+                              initialRows: rows,
+                              title: '${widget.client.fullName} - review',
+                              hint: 'Recorded holdings are loaded. Dates are not stored, so tap a fund '
+                                  'and add its purchase date to compare yearly returns with the '
+                                  'benchmark. Without a date you see total return only.',
+                            )));
+              },
+              icon: const Icon(Icons.fact_check_outlined, color: Brand.gold),
+              label: const Text('Review portfolio vs benchmark',
+                  style: TextStyle(color: Brand.gold)),
+            ),
             const SizedBox(height: 12),
             ...portfolio.holdings.map(_holdingCard),
             Padding(

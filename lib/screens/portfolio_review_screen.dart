@@ -58,7 +58,12 @@ Color _verdictColor(String v) {
 }
 
 class PortfolioReviewScreen extends StatefulWidget {
-  const PortfolioReviewScreen({super.key});
+  /// When given (for example a CRM client's holdings), the screen starts with
+  /// these rows, does not touch the saved personal list, and uses [title].
+  final List<PfRow>? initialRows;
+  final String? title;
+  final String? hint;
+  const PortfolioReviewScreen({super.key, this.initialRows, this.title, this.hint});
   @override
   State<PortfolioReviewScreen> createState() => _PortfolioReviewScreenState();
 }
@@ -75,7 +80,11 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
   @override
   void initState() {
     super.initState();
-    _restore();
+    if (widget.initialRows != null) {
+      _rows.addAll(widget.initialRows!);
+    } else {
+      _restore();
+    }
   }
 
   Future<void> _restore() async {
@@ -90,6 +99,7 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
   }
 
   Future<void> _save() async {
+    if (widget.initialRows != null) return; // client reviews are not stored on the phone
     try {
       final p = await SharedPreferences.getInstance();
       await p.setString(_prefKey, jsonEncode(_rows.map((e) => e.toJson()).toList()));
@@ -200,7 +210,7 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
       appBar: AppBar(
         backgroundColor: Brand.vault,
         foregroundColor: Brand.paper,
-        title: const Text('Portfolio review'),
+        title: Text(widget.title ?? 'Portfolio review'),
         actions: [
           if (_rows.isNotEmpty)
             IconButton(tooltip: 'Clear all', icon: const Icon(Icons.delete_outline), onPressed: _clear),
@@ -209,10 +219,11 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          const Text(
-            'Add your funds by hand or upload an Excel / CSV with columns: Fund name, Invested value, '
-            'Current value, Date. We compare each fund with its category and benchmark.',
-            style: TextStyle(color: Brand.mint, fontSize: 12.5),
+          Text(
+            widget.hint ??
+                'Add your funds by hand or upload an Excel / CSV with columns: Fund name, Invested value, '
+                    'Current value, Date. We compare each fund with its category and benchmark.',
+            style: const TextStyle(color: Brand.mint, fontSize: 12.5),
           ),
           const SizedBox(height: 12),
           Row(children: [
