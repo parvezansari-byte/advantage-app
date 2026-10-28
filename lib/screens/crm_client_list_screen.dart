@@ -12,6 +12,7 @@ import '../models/crm_client.dart';
 import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_client_detail_screen.dart';
+import 'crm_reminders_screen.dart';
 import 'crm_book_screen.dart';
 import 'crm_watch_screen.dart';
 
@@ -90,6 +91,12 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
         title: const Text('Clients',
             style: TextStyle(color: Brand.gold, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            tooltip: 'Reminders: birthdays and KYC',
+            icon: const Icon(Icons.cake_outlined, color: Brand.gold),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+                builder: (_) => CrmRemindersScreen(ownerEmail: widget.ownerEmail))),
+          ),
           IconButton(
             tooltip: 'Client book overview',
             icon: const Icon(Icons.pie_chart_outline, color: Brand.gold),
