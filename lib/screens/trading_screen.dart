@@ -583,6 +583,28 @@ class _OrdersTabState extends State<_OrdersTab> {
 // ---------------------------------------------------------------------------
 // Place order bottom sheet
 // ---------------------------------------------------------------------------
+/// Opens the order ticket as a bottom sheet. Used by the Trading screen and the stock screen.
+/// Every order still goes through the confirmation dialog before anything is sent to Dhan.
+void openOrderTicket(
+  BuildContext context, {
+  required String userEmail,
+  String? symbol,
+  String side = 'BUY',
+  VoidCallback? onPlaced,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _PlaceOrderSheet(
+      userEmail: userEmail,
+      prefillSymbol: symbol,
+      transactionType: side,
+      onPlaced: onPlaced ?? () {},
+    ),
+  );
+}
+
 class _PlaceOrderSheet extends StatefulWidget {
   final String userEmail;
   final String? prefillSymbol;
@@ -600,6 +622,8 @@ class _PlaceOrderSheet extends StatefulWidget {
 }
 
 class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
+  static const double _largeOrder = 200000; // rupees; above this the confirmation says so
+
   late final TextEditingController _symbol;
   final _qty = TextEditingController(text: '1');
   final _price = TextEditingController();
@@ -609,12 +633,75 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
   String _productType = 'CNC';
   bool _submitting = false;
   String? _error;
+  double? _ltp;
+  String? _ltpSymbol;
+  bool _ltpLoading = false;
+
+  static String _inr(num v) {
+    final n = v.round();
+    final s = n.abs().toString();
+    String out;
+    if (s.length <= 3) {
+      out = s;
+    } else {
+      var rest = s.substring(0, s.length - 3);
+      final parts = <String>[];
+      while (rest.length > 2) {
+        parts.insert(0, rest.substring(rest.length - 2));
+        rest = rest.substring(0, rest.length - 2);
+      }
+      if (rest.isNotEmpty) parts.insert(0, rest);
+      out = '${parts.join(',')},${s.substring(s.length - 3)}';
+    }
+    return '${n < 0 ? '-' : ''}₹$out';
+  }
 
   @override
   void initState() {
     super.initState();
-    _symbol = TextEditingController(text: widget.prefillSymbol ?? '');
+    final pre = (widget.prefillSymbol ?? '').toUpperCase().replaceAll('.NS', '').trim();
+    _symbol = TextEditingController(text: pre);
     _transactionType = widget.transactionType;
+    if (pre.isNotEmpty) _fetchLtp();
+  }
+
+  @override
+  void dispose() {
+    _symbol.dispose();
+    _qty.dispose();
+    _price.dispose();
+    _trigger.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchLtp() async {
+    final sym = _symbol.text.trim().toUpperCase();
+    if (sym.isEmpty) return;
+    setState(() => _ltpLoading = true);
+    try {
+      final px = await TradingApiService.getLtp(widget.userEmail, symbol: sym);
+      if (!mounted || _symbol.text.trim().toUpperCase() != sym) return;
+      setState(() {
+        _ltp = px > 0 ? px : null;
+        _ltpSymbol = sym;
+        if (_orderType == 'LIMIT' && _price.text.trim().isEmpty && px > 0) {
+          _price.text = px.toStringAsFixed(2);
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _ltp = null);
+    } finally {
+      if (mounted) setState(() => _ltpLoading = false);
+    }
+  }
+
+  /// Rough value of the order: limit price if set, else the last price.
+  double? _estimate() {
+    final qty = int.tryParse(_qty.text.trim()) ?? 0;
+    final limit = double.tryParse(_price.text.trim()) ?? 0;
+    final px = (_orderType == 'LIMIT' && limit > 0) ? limit : _ltp;
+    if (qty <= 0 || px == null || px <= 0) return null;
+    return qty * px;
   }
 
   Future<void> _confirmAndSubmit() async {
@@ -636,25 +723,52 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
       setState(() => _error = 'Enter a trigger price for this order type');
       return;
     }
+    final est = _estimate();
+    final large = est != null && est > _largeOrder;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: Brand.fern,
-        title: Text('Confirm $_transactionType order',
-            style: const TextStyle(color: Brand.paper)),
-        content: Text(
-          '$_transactionType $qty × $symbol ($_orderType'
-          '${needsPrice ? ' @ ₹$price' : ''})\n\n'
-          'This places a REAL order on your Dhan account. Continue?',
-          style: const TextStyle(color: Brand.mint),
+        title: Text('Confirm $_transactionType order', style: const TextStyle(color: Brand.paper)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$_transactionType $qty × $symbol\n'
+              '$_orderType • $_productType'
+              '${needsPrice ? ' • limit ₹${price.toStringAsFixed(2)}' : ''}'
+              '${needsTrigger ? ' • trigger ₹${trigger.toStringAsFixed(2)}' : ''}',
+              style: const TextStyle(color: Brand.paper, fontSize: 14),
+            ),
+            if (est != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('About ${_inr(est)}${needsPrice ? '' : ' at the last price'}',
+                    style: const TextStyle(color: Brand.mint)),
+              ),
+            if (large)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('This is a large order. Check the quantity.',
+                    style: TextStyle(color: Brand.gold, fontWeight: FontWeight.w700)),
+              ),
+            const Padding(
+              padding: EdgeInsets.only(top: 10),
+              child: Text('This places a REAL order on your Dhan account. Continue?',
+                  style: TextStyle(color: Brand.mint)),
+            ),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Brand.gold, foregroundColor: Brand.vault),
+            style: FilledButton.styleFrom(
+                backgroundColor: _transactionType == 'BUY' ? Brand.green : Brand.red,
+                foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Place order'),
+            child: Text('$_transactionType now'),
           ),
         ],
       ),
@@ -677,17 +791,20 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
         triggerPrice: needsTrigger ? trigger : 0,
       );
       if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        messenger.showSnackBar(SnackBar(
           content: Text('Order placed: ${res['orderStatus'] ?? res['orderId'] ?? 'submitted'}'),
         ));
         widget.onPlaced();
       }
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _submitting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _submitting = false;
+        });
+      }
     }
   }
 
@@ -695,6 +812,7 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
   Widget build(BuildContext context) {
     final needsPrice = _orderType == 'LIMIT';
     final needsTrigger = _orderType == 'STOP_LOSS' || _orderType == 'STOP_LOSS_MARKET';
+    final est = _estimate();
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
       child: Container(
@@ -708,8 +826,8 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Place order', style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: Brand.gold)),
+              const Text('Place order',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Brand.gold)),
               const SizedBox(height: 16),
               if (_error != null) ...[
                 Container(
@@ -749,14 +867,34 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
                 controller: _symbol,
                 textCapitalization: TextCapitalization.characters,
                 style: const TextStyle(color: Brand.paper),
-                decoration: const InputDecoration(labelText: 'Trading symbol (e.g. RELIANCE)'),
+                decoration: InputDecoration(
+                  labelText: 'Trading symbol (e.g. RELIANCE)',
+                  suffixIcon: _ltpLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+                      : IconButton(
+                          tooltip: 'Get last price',
+                          icon: const Icon(Icons.refresh, color: Brand.gold),
+                          onPressed: _fetchLtp,
+                        ),
+                ),
+                onSubmitted: (_) => _fetchLtp(),
+                onChanged: (_) => setState(() {}),
               ),
+              if (_ltp != null && _ltpSymbol == _symbol.text.trim().toUpperCase())
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('Last price ₹${_ltp!.toStringAsFixed(2)}',
+                      style: const TextStyle(color: Brand.mint, fontSize: 12)),
+                ),
               const SizedBox(height: 12),
               TextField(
                 controller: _qty,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(color: Brand.paper),
                 decoration: const InputDecoration(labelText: 'Quantity'),
+                onChanged: (_) => setState(() {}),
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
@@ -767,7 +905,12 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
                 items: const ['MARKET', 'LIMIT', 'STOP_LOSS', 'STOP_LOSS_MARKET']
                     .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                     .toList(),
-                onChanged: (v) => setState(() => _orderType = v ?? _orderType),
+                onChanged: (v) => setState(() {
+                  _orderType = v ?? _orderType;
+                  if (_orderType == 'LIMIT' && _price.text.trim().isEmpty && _ltp != null) {
+                    _price.text = _ltp!.toStringAsFixed(2);
+                  }
+                }),
               ),
               if (needsPrice) ...[
                 const SizedBox(height: 12),
@@ -776,6 +919,7 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   style: const TextStyle(color: Brand.paper),
                   decoration: const InputDecoration(labelText: 'Price'),
+                  onChanged: (_) => setState(() {}),
                 ),
               ],
               if (needsTrigger) ...[
@@ -798,6 +942,14 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
                     .toList(),
                 onChanged: (v) => setState(() => _productType = v ?? _productType),
               ),
+              if (est != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text('Estimated value ${_inr(est)}',
+                      style: TextStyle(
+                          color: est > _largeOrder ? Brand.gold : Brand.mint,
+                          fontWeight: est > _largeOrder ? FontWeight.w700 : FontWeight.w400)),
+                ),
               const SizedBox(height: 20),
               FilledButton(
                 onPressed: _submitting ? null : _confirmAndSubmit,
@@ -809,9 +961,15 @@ class _PlaceOrderSheetState extends State<_PlaceOrderSheet> {
                 ),
                 child: _submitting
                     ? const SizedBox(
-                        height: 20, width: 20,
+                        height: 20,
+                        width: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : Text('$_transactionType $_orderType'),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Orders go to your Dhan account. Dhan may require your server\'s static IP to be registered for order placement.',
+                style: TextStyle(color: Brand.mint, fontSize: 10.5),
               ),
             ],
           ),

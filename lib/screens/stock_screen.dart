@@ -9,6 +9,8 @@ import 'package:fl_chart/fl_chart.dart';
 import '../main.dart';
 import '../services/api_service.dart';
 import '../widgets/shareholding_card.dart';
+import '../services/auth_service.dart';
+import 'trading_screen.dart' show openOrderTicket;
 
 class StockScreen extends StatefulWidget {
   final String symbol;
@@ -120,6 +122,39 @@ class _StockScreenState extends State<StockScreen>
     }
   }
 
+  /// BUY / SELL bar for the owner login only. Opens the order ticket; nothing is sent
+  /// until the confirmation dialog is accepted.
+  Widget? _tradeBar() {
+    final email = AuthService.email;
+    if (email == null || email.trim().toLowerCase() != 'parvez.ansari@wealthy.in') return null;
+    if (_loading || _error != null) return null;
+    final sym = widget.symbol.toUpperCase().replaceAll('.NS', '').trim();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(children: [
+          Expanded(
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: Brand.green, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(46)),
+              onPressed: () => openOrderTicket(context, userEmail: email, symbol: sym, side: 'BUY'),
+              child: const Text('BUY', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: Brand.red, foregroundColor: Colors.white, minimumSize: const Size.fromHeight(46)),
+              onPressed: () => openOrderTicket(context, userEmail: email, symbol: sym, side: 'SELL'),
+              child: const Text('SELL', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -139,6 +174,7 @@ class _StockScreenState extends State<StockScreen>
                 ],
               ),
       ),
+      bottomNavigationBar: _tradeBar(),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: Brand.gold))
           : _error != null
