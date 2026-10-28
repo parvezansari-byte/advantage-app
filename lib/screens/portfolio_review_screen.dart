@@ -279,6 +279,10 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
   Widget _rowTile(int i) {
     final r = _rows[i];
     final gain = r.current - r.invested;
+    final sub = r.isSip
+        ? 'SIP ${_inr(r.sipAmount!)} a month  \u2022  from ${_dmy(r.sipStart)}'
+            '${r.sipEnd == null ? ' (running)' : ' to ${_dmy(r.sipEnd)}'}  \u2022  Now ${_inr(r.current)}'
+        : 'Invested ${_inr(r.invested)}  \u2022  Now ${_inr(r.current)}  \u2022  ${_dmy(r.date)}';
     return Card(
       color: Brand.fern.withOpacity(0.5),
       margin: const EdgeInsets.only(bottom: 8),
@@ -286,12 +290,11 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
         onTap: () => _addOrEdit(i),
         title: Text(r.name,
             maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Brand.paper, fontSize: 13.5)),
-        subtitle: Text(
-            'Invested ${_inr(r.invested)}  •  Now ${_inr(r.current)}  •  ${_dmy(r.date)}',
-            style: const TextStyle(color: Brand.mint, fontSize: 11.5)),
+        subtitle: Text(sub, style: const TextStyle(color: Brand.mint, fontSize: 11.5)),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(_pct(r.invested > 0 ? gain / r.invested * 100 : null),
-              style: TextStyle(color: gain >= 0 ? Brand.green : Brand.red, fontSize: 12)),
+          if (!r.isSip)
+            Text(_pct(r.invested > 0 ? gain / r.invested * 100 : null),
+                style: TextStyle(color: gain >= 0 ? Brand.green : Brand.red, fontSize: 12)),
           IconButton(
             icon: const Icon(Icons.close, size: 18, color: Brand.mint),
             onPressed: () {
@@ -458,6 +461,14 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
             '${_pct(h['abs_pct'] as num)} total'
             '${h['cagr_pct'] != null ? '  •  ${_pct(h['cagr_pct'] as num)} a year' : ''}',
             style: const TextStyle(color: Brand.paper, fontSize: 12)),
+        if (h['sip'] != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+                'SIP ${_inr((h['sip']['amount'] as num))} a month \u2022 ${h['sip']['instalments']} instalments'
+                '${h['sip']['running'] == true ? '' : ' (stopped)'}',
+                style: const TextStyle(color: Brand.mint, fontSize: 11.5)),
+          ),
         if (matched && (bench != null || cat != null)) ...[
           const SizedBox(height: 4),
           Text(
@@ -501,7 +512,9 @@ class _RowSheetState extends State<_RowSheet> {
   final _name = TextEditingController();
   final _inv = TextEditingController();
   final _cur = TextEditingController();
-  DateTime? _date;
+  final _sipAmt = TextEditingController();
+  DateTime? _date, _sipStart, _sipEnd;
+  bool _sip = false;
   List<String> _hits = [];
   Timer? _deb;
   String? _err;
@@ -515,6 +528,12 @@ class _RowSheetState extends State<_RowSheet> {
       _inv.text = i.invested.toStringAsFixed(0);
       _cur.text = i.current.toStringAsFixed(0);
       _date = i.date == null ? null : DateTime.tryParse(i.date!);
+      if (i.isSip) {
+        _sip = true;
+        _sipAmt.text = i.sipAmount!.toStringAsFixed(0);
+        _sipStart = i.sipStart == null ? null : DateTime.tryParse(i.sipStart!);
+        _sipEnd = i.sipEnd == null ? null : DateTime.tryParse(i.sipEnd!);
+      }
     }
   }
 
@@ -524,6 +543,7 @@ class _RowSheetState extends State<_RowSheet> {
     _name.dispose();
     _inv.dispose();
     _cur.dispose();
+    _sipAmt.dispose();
     super.dispose();
   }
 
@@ -543,22 +563,52 @@ class _RowSheetState extends State<_RowSheet> {
 
   double? _num(String s) => double.tryParse(s.replaceAll(RegExp(r'[,\s₹]'), ''));
 
+  String? _iso(DateTime? d) => d == null
+      ? null
+      : '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _show(DateTime? d, String empty) => d == null
+      ? empty
+      : '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}';
+
+  Future<DateTime?> _pick(DateTime? initial) {
+    final now = DateTime.now();
+    return showDatePicker(
+      context: context,
+      initialDate: initial ?? DateTime(now.year - 1, now.month, now.day),
+      firstDate: DateTime(2000),
+      lastDate: now,
+    );
+  }
+
   void _submit() {
-    final inv = _num(_inv.text), cur = _num(_cur.text);
+    final cur = _num(_cur.text);
     if (_name.text.trim().isEmpty) return setState(() => _err = 'Enter the fund name');
-    if (inv == null || inv <= 0) return setState(() => _err = 'Invested value must be above 0');
     if (cur == null || cur < 0) return setState(() => _err = 'Enter the current value');
-    final d = _date;
+    if (_sip) {
+      final amt = _num(_sipAmt.text);
+      if (amt == null || amt <= 0) return setState(() => _err = 'Enter the monthly SIP amount');
+      if (_sipStart == null) return setState(() => _err = 'Pick the date of the first instalment');
+      if (_sipEnd != null && _sipEnd!.isBefore(_sipStart!)) {
+        return setState(() => _err = 'The end date must be after the start date');
+      }
+      Navigator.pop(
+        context,
+        PfRow(
+            name: _name.text.trim(),
+            invested: 0,
+            current: cur,
+            sipAmount: amt,
+            sipStart: _iso(_sipStart),
+            sipEnd: _iso(_sipEnd)),
+      );
+      return;
+    }
+    final inv = _num(_inv.text);
+    if (inv == null || inv <= 0) return setState(() => _err = 'Invested value must be above 0');
     Navigator.pop(
       context,
-      PfRow(
-        name: _name.text.trim(),
-        invested: inv,
-        current: cur,
-        date: d == null
-            ? null
-            : '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}',
-      ),
+      PfRow(name: _name.text.trim(), invested: inv, current: cur, date: _iso(_date)),
     );
   }
 
@@ -593,12 +643,29 @@ class _RowSheetState extends State<_RowSheet> {
                 _hits = [];
               }),
             ),
-          TextField(
-            controller: _inv,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(color: Brand.paper),
-            decoration: _dec('Invested value (₹)'),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            activeColor: Brand.gold,
+            title: const Text('Monthly SIP', style: TextStyle(color: Brand.paper, fontSize: 14)),
+            subtitle: const Text('One instalment every month instead of a single purchase',
+                style: TextStyle(color: Brand.mint, fontSize: 11)),
+            value: _sip,
+            onChanged: (v) => setState(() => _sip = v),
           ),
+          if (!_sip)
+            TextField(
+              controller: _inv,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Brand.paper),
+              decoration: _dec('Invested value (\u20b9)'),
+            ),
+          if (_sip)
+            TextField(
+              controller: _sipAmt,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Brand.paper),
+              decoration: _dec('SIP amount a month (\u20b9)'),
+            ),
           TextField(
             controller: _cur,
             keyboardType: TextInputType.number,
@@ -606,29 +673,51 @@ class _RowSheetState extends State<_RowSheet> {
             decoration: _dec('Current value (₹)'),
           ),
           const SizedBox(height: 10),
-          OutlinedButton.icon(
-            icon: const Icon(Icons.event, color: Brand.gold),
-            label: Text(
-                _date == null
-                    ? 'Investment date'
-                    : '${_date!.day.toString().padLeft(2, '0')}-${_date!.month.toString().padLeft(2, '0')}-${_date!.year}',
-                style: const TextStyle(color: Brand.gold)),
-            onPressed: () async {
-              final now = DateTime.now();
-              final d = await showDatePicker(
-                context: context,
-                initialDate: _date ?? DateTime(now.year - 1, now.month, now.day),
-                firstDate: DateTime(2000),
-                lastDate: now,
-              );
-              if (d != null) setState(() => _date = d);
-            },
-          ),
-          const Padding(
-            padding: EdgeInsets.only(top: 6),
-            child: Text('Date of purchase (for SIPs, add each instalment as its own row).',
-                style: TextStyle(color: Brand.mint, fontSize: 11)),
-          ),
+          if (!_sip) ...[
+            OutlinedButton.icon(
+              icon: const Icon(Icons.event, color: Brand.gold),
+              label: Text(_show(_date, 'Investment date'), style: const TextStyle(color: Brand.gold)),
+              onPressed: () async {
+                final d = await _pick(_date);
+                if (d != null) setState(() => _date = d);
+              },
+            ),
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text('Date of purchase. Needed to compare yearly returns with the benchmark.',
+                  style: TextStyle(color: Brand.mint, fontSize: 11)),
+            ),
+          ],
+          if (_sip) ...[
+            OutlinedButton.icon(
+              icon: const Icon(Icons.event, color: Brand.gold),
+              label: Text(_show(_sipStart, 'First instalment date'), style: const TextStyle(color: Brand.gold)),
+              onPressed: () async {
+                final d = await _pick(_sipStart);
+                if (d != null) setState(() => _sipStart = d);
+              },
+            ),
+            const SizedBox(height: 6),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.event_busy, color: Brand.gold),
+                  label: Text(_show(_sipEnd, 'Still running'), style: const TextStyle(color: Brand.gold)),
+                  onPressed: () async {
+                    final d = await _pick(_sipEnd ?? DateTime.now());
+                    if (d != null) setState(() => _sipEnd = d);
+                  },
+                ),
+              ),
+              if (_sipEnd != null)
+                TextButton(onPressed: () => setState(() => _sipEnd = null), child: const Text('Running')),
+            ]),
+            const Padding(
+              padding: EdgeInsets.only(top: 6),
+              child: Text("Instalments are counted monthly on the start date's day, up to the end date or today.",
+                  style: TextStyle(color: Brand.mint, fontSize: 11)),
+            ),
+          ],
           if (_err != null)
             Padding(padding: const EdgeInsets.only(top: 8), child: Text(_err!, style: const TextStyle(color: Brand.red))),
           const SizedBox(height: 12),

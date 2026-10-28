@@ -8,17 +8,39 @@ class PfRow {
   String name;
   double invested, current;
   String? date; // yyyy-mm-dd
-  PfRow({required this.name, required this.invested, required this.current, this.date});
+  // Monthly SIP (when sipAmount is set, invested is worked out by the server)
+  double? sipAmount;
+  String? sipStart, sipEnd; // yyyy-mm-dd; sipEnd null = still running
+  PfRow(
+      {required this.name,
+      required this.invested,
+      required this.current,
+      this.date,
+      this.sipAmount,
+      this.sipStart,
+      this.sipEnd});
+
+  bool get isSip => sipAmount != null && sipAmount! > 0;
 
   factory PfRow.fromJson(Map<String, dynamic> j) => PfRow(
         name: '${j['name'] ?? ''}',
         invested: (j['invested'] as num?)?.toDouble() ?? 0,
         current: (j['current'] as num?)?.toDouble() ?? 0,
         date: j['date'] as String?,
+        sipAmount: (j['sip_amount'] as num?)?.toDouble(),
+        sipStart: j['sip_start'] as String?,
+        sipEnd: j['sip_end'] as String?,
       );
 
-  Map<String, dynamic> toJson() =>
-      {'name': name, 'invested': invested, 'current': current, 'date': date};
+  Map<String, dynamic> toJson() => isSip
+      ? {
+          'name': name,
+          'current': current,
+          'sip_amount': sipAmount,
+          'sip_start': sipStart,
+          'sip_end': sipEnd,
+        }
+      : {'name': name, 'invested': invested, 'current': current, 'date': date};
 }
 
 class PortfolioReviewService {
