@@ -14,6 +14,7 @@ import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_holdings_tab.dart';
 import 'crm_orders_tab.dart';
+import 'risk_profile_screen.dart';
 import 'crm_tax_screen.dart';
 
 const _months = [
@@ -114,6 +115,19 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
         title: Text(_client.fullName,
             style: const TextStyle(color: Brand.gold, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+              tooltip: 'Risk profile questionnaire',
+              icon: const Icon(Icons.speed_outlined, color: Brand.gold),
+              onPressed: () async {
+                final saved = await Navigator.push<bool>(context, MaterialPageRoute(
+                    builder: (_) => RiskProfileScreen(
+                        ownerEmail: widget.ownerEmail, client: _client)));
+                if (saved == true) {
+                  final refreshed =
+                      await CrmApiService.getClient(widget.ownerEmail, _client.id!);
+                  if (mounted) setState(() => _client = refreshed);
+                }
+              }),
           IconButton(
               tooltip: 'Capital gains estimate',
               icon: const Icon(Icons.receipt_long_outlined, color: Brand.gold),
