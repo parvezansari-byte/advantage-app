@@ -14,6 +14,7 @@ import '../main.dart';
 import '../services/api_service.dart';
 import 'allocation_screen.dart';
 import 'portfolio_review_screen.dart';
+import 'goal_planner_screen.dart';
 
 // ===========================================================================
 // FORMATTING
@@ -191,6 +192,12 @@ class _FundsScreenState extends State<FundsScreen> {
             icon: const Icon(Icons.auto_graph, color: Brand.gold, size: 18),
             label: const Text('Auto allocate',
                 style: TextStyle(color: Brand.gold, fontSize: 12.5)),
+          ),
+          IconButton(
+            tooltip: 'Goal planner',
+            icon: const Icon(Icons.flag_outlined, color: Brand.gold),
+            onPressed: () => Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const GoalPlannerScreen())),
           ),
           IconButton(
             tooltip: 'Portfolio review',
