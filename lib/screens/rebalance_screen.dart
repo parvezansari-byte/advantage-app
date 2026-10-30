@@ -34,7 +34,9 @@ Color _statusColor(String s) =>
 
 class RebalanceScreen extends StatefulWidget {
   final List<PfRow> rows;
-  const RebalanceScreen({super.key, required this.rows});
+  /// 'conservative', 'balanced' or 'aggressive'; defaults to balanced.
+  final String? initialRisk;
+  const RebalanceScreen({super.key, required this.rows, this.initialRisk});
   @override
   State<RebalanceScreen> createState() => _RebalanceScreenState();
 }
@@ -54,6 +56,9 @@ class _RebalanceScreenState extends State<RebalanceScreen> {
   @override
   void initState() {
     super.initState();
+    if (const ['conservative', 'balanced', 'aggressive'].contains(widget.initialRisk)) {
+      _risk = widget.initialRisk!;
+    }
     _run();
   }
 

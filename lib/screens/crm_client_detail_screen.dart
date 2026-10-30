@@ -14,6 +14,9 @@ import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_holdings_tab.dart';
 import 'crm_orders_tab.dart';
+import '../services/holdings_api_service.dart';
+import '../services/portfolio_review_service.dart';
+import 'rebalance_screen.dart';
 import 'crm_lookthrough_screen.dart';
 import '../services/client_summary_share.dart';
 import 'risk_profile_screen.dart';
@@ -143,6 +146,40 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
                             ownerEmail: widget.ownerEmail,
                             clientId: _client.id!,
                             clientName: _client.fullName)));
+              } else if (v == 'rebalance') {
+                try {
+                  final p = await HoldingsApiService.getPortfolio(
+                      widget.ownerEmail, _client.id!);
+                  final rows = p.holdings
+                      .where((h) => h.currentValue != null && h.invested > 0)
+                      .map((h) => PfRow(
+                          name: h.schemeName,
+                          invested: h.invested,
+                          current: h.currentValue!,
+                          date: h.buyDate))
+                      .toList();
+                  if (!mounted) return;
+                  if (rows.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('No priced holdings to check yet')));
+                    return;
+                  }
+                  final rp = (_client.riskProfile ?? '').toUpperCase();
+                  final risk = rp == 'CONSERVATIVE'
+                      ? 'conservative'
+                      : rp == 'AGGRESSIVE'
+                          ? 'aggressive'
+                          : 'balanced';
+                  await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) =>
+                              RebalanceScreen(rows: rows, initialRisk: risk)));
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Could not load holdings: $e')));
+                }
               } else if (v == 'tax') {
                 await Navigator.push(
                     context,
@@ -165,6 +202,10 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
               PopupMenuItem(
                   value: 'look',
                   child: Text('What they really own (look-through)',
+                      style: TextStyle(color: Brand.paper))),
+              PopupMenuItem(
+                  value: 'rebalance',
+                  child: Text('Check against target mix',
                       style: TextStyle(color: Brand.paper))),
               PopupMenuItem(
                   value: 'tax',
