@@ -5,10 +5,14 @@
 // of asking for one on a separate "identify" screen, since the main
 // Advantage app already knows who's signed in.
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../models/crm_client.dart';
+import '../services/api_service.dart' show ApiService;
+import '../services/authed_http.dart' as http;
 import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_client_detail_screen.dart';
@@ -40,11 +44,40 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
 
   String _sort = 'NAME';
 
+  Map<int, double> _aum = {};
+
+  /// Current value per client (from the book summary), used by the
+  /// "Largest AUM first" sort. Failures are ignored - the sort then falls
+  /// back to name order.
+  Future<void> _loadAum() async {
+    try {
+      final res = await http
+          .get(Uri.parse(
+              '${ApiService.baseUrl}/crm/${widget.ownerEmail}/book-summary'))
+          .timeout(const Duration(seconds: 40));
+      if (res.statusCode != 200) return;
+      final body = jsonDecode(res.body);
+      final m = <int, double>{};
+      for (final c in (body['clients'] as List? ?? const [])) {
+        final id = (c['client_id'] as num?)?.toInt();
+        final v = (c['value'] as num?)?.toDouble();
+        if (id != null && v != null) m[id] = v;
+      }
+      if (mounted) setState(() => _aum = m);
+    } catch (_) {}
+  }
+
   List<CrmClient> get _visible {
     final list = List<CrmClient>.from(_filtered);
     int cmpName(CrmClient a, CrmClient b) =>
         a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
     switch (_sort) {
+      case 'AUM':
+        list.sort((a, b) {
+          final r = (_aum[b.id] ?? 0).compareTo(_aum[a.id] ?? 0);
+          return r != 0 ? r : cmpName(a, b);
+        });
+        break;
       case 'RECENT':
         list.sort((a, b) {
           final r = (b.createdAt ?? '').compareTo(a.createdAt ?? '');
@@ -68,6 +101,7 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
       'NAME': 'Name A-Z',
       'RECENT': 'Recently added',
       'KYC': 'KYC pending first',
+      'AUM': 'Largest AUM first',
     };
     return Padding(
       padding: const EdgeInsets.only(right: 6),
@@ -186,6 +220,7 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
         _clients = clients;
         _loading = false;
       });
+      _loadAum();
     } catch (e) {
       setState(() {
         _error = e.toString();
