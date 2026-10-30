@@ -14,6 +14,7 @@ import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_holdings_tab.dart';
 import 'crm_orders_tab.dart';
+import '../services/client_summary_share.dart';
 import 'risk_profile_screen.dart';
 import 'crm_tax_screen.dart';
 
@@ -115,6 +116,10 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
         title: Text(_client.fullName,
             style: const TextStyle(color: Brand.gold, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+              tooltip: 'Send portfolio summary on WhatsApp',
+              icon: const Icon(Icons.share_outlined, color: Brand.green),
+              onPressed: () => shareClientSummary(context, widget.ownerEmail, _client.id!)),
           IconButton(
               tooltip: 'Risk profile questionnaire',
               icon: const Icon(Icons.speed_outlined, color: Brand.gold),
