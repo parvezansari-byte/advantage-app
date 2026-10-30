@@ -38,7 +38,73 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
     return k == 'KYC_VALIDATED' || k == 'KYC_REGISTERED';
   }
 
+  String _sort = 'NAME';
+
   List<CrmClient> get _visible {
+    final list = List<CrmClient>.from(_filtered);
+    int cmpName(CrmClient a, CrmClient b) =>
+        a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+    switch (_sort) {
+      case 'RECENT':
+        list.sort((a, b) {
+          final r = (b.createdAt ?? '').compareTo(a.createdAt ?? '');
+          return r != 0 ? r : cmpName(a, b);
+        });
+        break;
+      case 'KYC':
+        list.sort((a, b) {
+          final r = (_isKycDone(a) ? 1 : 0) - (_isKycDone(b) ? 1 : 0);
+          return r != 0 ? r : cmpName(a, b);
+        });
+        break;
+      default:
+        list.sort(cmpName);
+    }
+    return list;
+  }
+
+  Widget _sortButton() {
+    const labels = {
+      'NAME': 'Name A-Z',
+      'RECENT': 'Recently added',
+      'KYC': 'KYC pending first',
+    };
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: PopupMenuButton<String>(
+        tooltip: 'Sort clients',
+        color: Brand.fern,
+        onSelected: (v) => setState(() => _sort = v),
+        itemBuilder: (_) => [
+          for (final e in labels.entries)
+            PopupMenuItem<String>(
+              value: e.key,
+              child: Text(e.value,
+                  style: TextStyle(
+                      color: _sort == e.key ? Brand.gold : Brand.paper)),
+            ),
+        ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: Brand.fern.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.sort, color: Brand.gold, size: 16),
+              const SizedBox(width: 4),
+              Text(labels[_sort]!,
+                  style: const TextStyle(color: Brand.paper, fontSize: 12)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<CrmClient> get _filtered {
     switch (_filter) {
       case 'KYC':
         return _clients.where((c) => !_isKycDone(c)).toList();
@@ -72,6 +138,7 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         children: [
+          _sortButton(),
           for (final it in items)
             Padding(
               padding: const EdgeInsets.only(right: 6),
