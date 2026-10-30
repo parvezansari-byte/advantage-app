@@ -565,6 +565,9 @@ class ApiService {
       final body = jsonDecode(r.body);
       if (body is Map && body['detail'] != null) return '${body['detail']}';
     } catch (_) {}
+    if (r.statusCode == 502 || r.statusCode == 503 || r.statusCode == 504) {
+      return 'The server is waking up or restarting (HTTP ${r.statusCode}). Wait about a minute and tap Try again.';
+    }
     return 'Option chain request failed (HTTP ${r.statusCode})';
   }
 
