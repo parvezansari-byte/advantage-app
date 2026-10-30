@@ -17,11 +17,17 @@ class CrmLookthroughScreen extends StatefulWidget {
   final String ownerEmail;
   final int clientId;
   final String clientName;
+
+  /// When given, these [{name, current}] holdings are analysed through
+  /// POST /portfolio/lookthrough instead of loading a client's saved holdings.
+  final List<Map<String, dynamic>>? holdings;
+
   const CrmLookthroughScreen(
       {super.key,
-      required this.ownerEmail,
-      required this.clientId,
-      required this.clientName});
+      this.ownerEmail = '',
+      this.clientId = 0,
+      required this.clientName,
+      this.holdings});
 
   @override
   State<CrmLookthroughScreen> createState() => _CrmLookthroughScreenState();
@@ -44,10 +50,16 @@ class _CrmLookthroughScreenState extends State<CrmLookthroughScreen> {
       _error = null;
     });
     try {
-      final res = await http
-          .get(Uri.parse('${ApiService.baseUrl}/crm/${widget.ownerEmail}'
-              '/clients/${widget.clientId}/lookthrough'))
-          .timeout(const Duration(seconds: 90));
+      final res = widget.holdings != null
+          ? await http
+              .post(Uri.parse('${ApiService.baseUrl}/portfolio/lookthrough'),
+                  headers: {'Content-Type': 'application/json'},
+                  body: jsonEncode({'holdings': widget.holdings}))
+              .timeout(const Duration(seconds: 90))
+          : await http
+              .get(Uri.parse('${ApiService.baseUrl}/crm/${widget.ownerEmail}'
+                  '/clients/${widget.clientId}/lookthrough'))
+              .timeout(const Duration(seconds: 90));
       final body = jsonDecode(res.body);
       if (res.statusCode != 200) {
         throw Exception(body is Map ? (body['detail'] ?? res.body) : res.body);
@@ -96,7 +108,7 @@ class _CrmLookthroughScreenState extends State<CrmLookthroughScreen> {
       appBar: AppBar(
         backgroundColor: Brand.vault,
         foregroundColor: Brand.paper,
-        title: Text('Look-through: ${widget.clientName}',
+        title: Text('What ${widget.clientName == 'Your portfolio' ? 'you own' : widget.clientName + ' owns'}',
             style: const TextStyle(
                 color: Brand.gold, fontWeight: FontWeight.bold, fontSize: 17)),
         actions: [
@@ -132,7 +144,7 @@ class _CrmLookthroughScreenState extends State<CrmLookthroughScreen> {
     final total = (_d['total_value'] ?? 0) as num;
     if (total == 0) {
       return const Center(
-          child: Text('No priced holdings for this client.',
+          child: Text('No priced holdings to analyse.',
               style: TextStyle(color: Brand.mint)));
     }
     final stocks = _l('top_stocks');

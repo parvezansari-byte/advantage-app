@@ -18,6 +18,7 @@ import '../main.dart';
 import '../services/portfolio_review_service.dart';
 import 'fund_compare_screen.dart';
 import 'rebalance_screen.dart';
+import 'crm_lookthrough_screen.dart';
 
 String _inr(num v) {
   final n = v.round();
@@ -375,6 +376,16 @@ class _PortfolioReviewScreenState extends State<PortfolioReviewScreen> {
             context, MaterialPageRoute(builder: (_) => RebalanceScreen(rows: List<PfRow>.of(_rows)))),
         icon: const Icon(Icons.balance, color: Brand.gold),
         label: const Text('Check against a target mix', style: TextStyle(color: Brand.gold)),
+      ),
+      OutlinedButton.icon(
+        onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => CrmLookthroughScreen(
+                    clientName: 'Your portfolio',
+                    holdings: _rows.map((r) => {'name': r.name, 'current': r.current}).toList()))),
+        icon: const Icon(Icons.layers_outlined, color: Brand.gold),
+        label: const Text('What you really own (stocks inside)', style: TextStyle(color: Brand.gold)),
       ),
       const SizedBox(height: 16),
       const Text('FUND BY FUND', style: TextStyle(color: Brand.gold, fontWeight: FontWeight.w700, letterSpacing: .6)),
