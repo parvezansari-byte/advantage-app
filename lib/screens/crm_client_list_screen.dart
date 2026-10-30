@@ -12,6 +12,7 @@ import '../models/crm_client.dart';
 import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_client_detail_screen.dart';
+import 'crm_today_strip.dart';
 import 'crm_reminders_screen.dart';
 import 'crm_book_screen.dart';
 import 'crm_watch_screen.dart';
@@ -135,6 +136,7 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            CrmTodayStrip(ownerEmail: widget.ownerEmail),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: TextField(
