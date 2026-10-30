@@ -31,6 +31,67 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
   String? _error;
   final _searchController = TextEditingController();
   String _search = '';
+  String _filter = 'ALL';
+
+  bool _isKycDone(CrmClient c) {
+    final k = c.kycStatus.toUpperCase();
+    return k == 'KYC_VALIDATED' || k == 'KYC_REGISTERED';
+  }
+
+  List<CrmClient> get _visible {
+    switch (_filter) {
+      case 'KYC':
+        return _clients.where((c) => !_isKycDone(c)).toList();
+      case 'NONE':
+        return _clients
+            .where((c) => (c.riskProfile ?? '').trim().isEmpty)
+            .toList();
+      case 'CONSERVATIVE':
+      case 'MODERATE':
+      case 'AGGRESSIVE':
+        return _clients
+            .where((c) => (c.riskProfile ?? '').toUpperCase() == _filter)
+            .toList();
+      default:
+        return _clients;
+    }
+  }
+
+  Widget _filterBar() {
+    const items = <List<String>>[
+      ['ALL', 'All'],
+      ['KYC', 'KYC pending'],
+      ['CONSERVATIVE', 'Conservative'],
+      ['MODERATE', 'Moderate'],
+      ['AGGRESSIVE', 'Aggressive'],
+      ['NONE', 'No risk profile'],
+    ];
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        children: [
+          for (final it in items)
+            Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: ChoiceChip(
+                label: Text(it[1]),
+                selected: _filter == it[0],
+                onSelected: (_) => setState(() => _filter = it[0]),
+                selectedColor: Brand.gold,
+                backgroundColor: Brand.fern.withValues(alpha: 0.4),
+                labelStyle: TextStyle(
+                    fontSize: 12,
+                    color: _filter == it[0] ? Brand.vault : Brand.paper),
+                side: BorderSide.none,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
 
   static const _avatarColors = [
     Brand.gold,
@@ -172,6 +233,8 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
               ),
             ),
             _SummaryStrip(clients: _clients),
+            _filterBar(),
+            const SizedBox(height: 6),
             Expanded(child: _buildBody()),
           ],
         ),
@@ -234,16 +297,25 @@ class _CrmClientListScreenState extends State<CrmClientListScreen> {
         ),
       );
     }
+    if (_visible.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('No clients match this filter.',
+              style: TextStyle(color: Brand.mint, fontSize: 13)),
+        ),
+      );
+    }
     return RefreshIndicator(
       onRefresh: _load,
       color: Brand.gold,
       backgroundColor: Brand.fern,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
-        itemCount: _clients.length,
+        itemCount: _visible.length,
         separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, i) {
-          final c = _clients[i];
+          final c = _visible[i];
           return _ClientTile(
             client: c,
             avatarColor: _avatarColor(c.pan),
