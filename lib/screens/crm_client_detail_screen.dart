@@ -14,6 +14,7 @@ import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_holdings_tab.dart';
 import 'crm_orders_tab.dart';
+import 'crm_lookthrough_screen.dart';
 import '../services/client_summary_share.dart';
 import 'risk_profile_screen.dart';
 import 'crm_tax_screen.dart';
@@ -134,6 +135,14 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
                       widget.ownerEmail, _client.id!);
                   if (mounted) setState(() => _client = refreshed);
                 }
+              } else if (v == 'look') {
+                await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => CrmLookthroughScreen(
+                            ownerEmail: widget.ownerEmail,
+                            clientId: _client.id!,
+                            clientName: _client.fullName)));
               } else if (v == 'tax') {
                 await Navigator.push(
                     context,
@@ -152,6 +161,10 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
               PopupMenuItem(
                   value: 'risk',
                   child: Text('Risk profile questionnaire',
+                      style: TextStyle(color: Brand.paper))),
+              PopupMenuItem(
+                  value: 'look',
+                  child: Text('What they really own (look-through)',
                       style: TextStyle(color: Brand.paper))),
               PopupMenuItem(
                   value: 'tax',
