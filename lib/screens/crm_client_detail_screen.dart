@@ -116,31 +116,49 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
         title: Text(_client.fullName,
             style: const TextStyle(color: Brand.gold, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-              tooltip: 'Send portfolio summary on WhatsApp',
-              icon: const Icon(Icons.share_outlined, color: Brand.green),
-              onPressed: () => shareClientSummary(context, widget.ownerEmail, _client.id!)),
-          IconButton(
-              tooltip: 'Risk profile questionnaire',
-              icon: const Icon(Icons.speed_outlined, color: Brand.gold),
-              onPressed: () async {
-                final saved = await Navigator.push<bool>(context, MaterialPageRoute(
-                    builder: (_) => RiskProfileScreen(
-                        ownerEmail: widget.ownerEmail, client: _client)));
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_vert, color: Brand.gold),
+            color: Brand.fern,
+            onSelected: (v) async {
+              if (v == 'wa') {
+                await shareClientSummary(context, widget.ownerEmail, _client.id!);
+              } else if (v == 'risk') {
+                final saved = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => RiskProfileScreen(
+                            ownerEmail: widget.ownerEmail, client: _client)));
                 if (saved == true) {
-                  final refreshed =
-                      await CrmApiService.getClient(widget.ownerEmail, _client.id!);
+                  final refreshed = await CrmApiService.getClient(
+                      widget.ownerEmail, _client.id!);
                   if (mounted) setState(() => _client = refreshed);
                 }
-              }),
-          IconButton(
-              tooltip: 'Capital gains estimate',
-              icon: const Icon(Icons.receipt_long_outlined, color: Brand.gold),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => CrmTaxScreen(
-                      ownerEmail: widget.ownerEmail,
-                      clientId: _client.id!,
-                      clientName: _client.fullName)))),
+              } else if (v == 'tax') {
+                await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => CrmTaxScreen(
+                            ownerEmail: widget.ownerEmail,
+                            clientId: _client.id!,
+                            clientName: _client.fullName)));
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                  value: 'wa',
+                  child: Text('Send summary on WhatsApp',
+                      style: TextStyle(color: Brand.paper))),
+              PopupMenuItem(
+                  value: 'risk',
+                  child: Text('Risk profile questionnaire',
+                      style: TextStyle(color: Brand.paper))),
+              PopupMenuItem(
+                  value: 'tax',
+                  child: Text('Capital gains estimate',
+                      style: TextStyle(color: Brand.paper))),
+            ],
+          ),
           IconButton(
               icon: const Icon(Icons.edit_outlined, color: Brand.mint),
               onPressed: _edit),
