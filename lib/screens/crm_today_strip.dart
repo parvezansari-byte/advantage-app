@@ -16,6 +16,7 @@ import '../services/api_service.dart' show ApiService;
 import '../services/authed_http.dart' as http;
 import 'crm_reminders_screen.dart';
 import 'crm_watch_screen.dart';
+import 'crm_risk_mismatch_screen.dart';
 
 class CrmTodayStrip extends StatefulWidget {
   final String ownerEmail;
@@ -29,6 +30,7 @@ class _CrmTodayStripState extends State<CrmTodayStrip> {
   int? _birthdays; // in the next 7 days
   int? _today; // birthdays today
   int? _kyc;
+  int? _mismatch;
   int? _behind;
   bool _behindLoading = true;
 
@@ -37,6 +39,7 @@ class _CrmTodayStripState extends State<CrmTodayStrip> {
     super.initState();
     _loadReminders();
     _loadBehind();
+    _loadMismatch();
   }
 
   Future<Map<String, dynamic>?> _get(String path, int seconds) async {
@@ -60,6 +63,13 @@ class _CrmTodayStripState extends State<CrmTodayStrip> {
       _today = (c['today'] ?? 0) as int;
       _kyc = (c['kyc_pending'] ?? 0) as int;
     });
+  }
+
+  Future<void> _loadMismatch() async {
+    final j = await _get('/crm/${widget.ownerEmail}/risk-mismatch', 90);
+    if (!mounted || j == null) return;
+    final c = Map<String, dynamic>.from((j['counts'] ?? {}) as Map);
+    setState(() => _mismatch = (c['flagged'] ?? 0) as int);
   }
 
   Future<void> _loadBehind() async {
@@ -102,6 +112,10 @@ class _CrmTodayStripState extends State<CrmTodayStrip> {
     if (_kyc != null && _kyc! > 0) {
       chips.add(_chip(Icons.badge_outlined, '$_kyc KYC pending', Brand.gold,
           () => _open(CrmRemindersScreen(ownerEmail: widget.ownerEmail))));
+    }
+    if (_mismatch != null && _mismatch! > 0) {
+      chips.add(_chip(Icons.compare_arrows, '$_mismatch off risk profile', Brand.red,
+          () => _open(CrmRiskMismatchScreen(ownerEmail: widget.ownerEmail))));
     }
     if (chips.isEmpty) return const SizedBox.shrink();
     return SizedBox(
