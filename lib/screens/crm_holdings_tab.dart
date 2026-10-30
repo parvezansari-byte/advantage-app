@@ -11,6 +11,7 @@ import '../models/crm_client.dart';
 import '../services/crm_api_service.dart';
 import '../services/holdings_api_service.dart';
 import 'crm_add_holding_screen.dart';
+import 'crm_import_holdings_screen.dart';
 import 'crm_orders_tab.dart' show formatInr;
 import 'portfolio_review_screen.dart';
 import '../services/portfolio_review_service.dart' show PfRow;
@@ -319,6 +320,26 @@ class _CrmHoldingsTabState extends State<CrmHoldingsTab> {
             icon: const Icon(Icons.add),
             label: const Text('Add holding',
                 style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Brand.gold,
+              side: BorderSide(color: Brand.gold.withValues(alpha: 0.5)),
+              minimumSize: const Size.fromHeight(42),
+            ),
+            onPressed: () async {
+              final done = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CrmImportHoldingsScreen(
+                      ownerEmail: widget.ownerEmail, client: widget.client),
+                ),
+              );
+              if (done == true) await _load(silent: true);
+            },
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Import from CSV'),
           ),
           const SizedBox(height: 14),
           if (empty)

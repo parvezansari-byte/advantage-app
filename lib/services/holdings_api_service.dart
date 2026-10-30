@@ -138,6 +138,24 @@ class HoldingsApiService {
 
   /// Adds units. If the client already holds this fund (same folio), the
   /// server merges them in and recomputes the average NAV.
+  /// Bulk import (see holdings_import_api.py). [dryRun] only validates.
+  static Future<Map<String, dynamic>> importHoldings(
+    String ownerEmail,
+    int clientId,
+    List<Map<String, dynamic>> rows, {
+    bool dryRun = false,
+  }) async {
+    final res = await http
+        .post(
+          Uri.parse(
+              '$_baseUrl/crm/$ownerEmail/clients/$clientId/portfolio/import'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'rows': rows, 'dry_run': dryRun}),
+        )
+        .timeout(const Duration(seconds: 90));
+    return _decode(res);
+  }
+
   static Future<void> addHolding(
     String ownerEmail,
     int clientId, {
