@@ -23,6 +23,7 @@ import 'portfolio_screen.dart';
 import 'tax_screen.dart';
 import 'finance_screen.dart';
 import 'sms_tracking_screen.dart';
+import '../feature_flags.dart';
 import '../services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -446,6 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       MaterialPageRoute(builder: (_) => FinanceScreen(userEmail: email)));
                 },
               ),
+              if (kEnableSmsTracking)
               _MenuCard(
                 icon: Icons.sms_outlined,
                 iconColor: Brand.gold,
