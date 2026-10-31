@@ -23,6 +23,7 @@ import 'portfolio_screen.dart';
 import 'tax_screen.dart';
 import 'finance_screen.dart';
 import 'sms_tracking_screen.dart';
+import 'delete_account_dialog.dart';
 import '../feature_flags.dart';
 import '../services/auth_service.dart';
 
@@ -132,17 +133,46 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const NotificationBell(),
-                  IconButton(
+                  PopupMenuButton<String>(
+                    tooltip: 'Account',
+                    color: Brand.fern,
                     icon: const Icon(Icons.logout, color: Brand.mint, size: 20),
-                    tooltip: 'Sign out',
-                    onPressed: () async {
-                      await AuthService.logout();
-                      if (!context.mounted) return;
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      );
+                    onSelected: (v) async {
+                      void toLogin() {
+                        if (!context.mounted) return;
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const LoginScreen()),
+                        );
+                      }
+
+                      if (v == 'out') {
+                        await AuthService.logout();
+                        toLogin();
+                      } else if (v == 'delete') {
+                        final email = AuthService.email ?? '';
+                        if (email.isEmpty) return;
+                        await confirmDeleteAccount(
+                          context,
+                          email: email,
+                          onDeleted: () async {
+                            await AuthService.logout();
+                            toLogin();
+                          },
+                        );
+                      }
                     },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                          value: 'out',
+                          child: Text('Sign out',
+                              style: TextStyle(color: Brand.paper))),
+                      PopupMenuItem(
+                          value: 'delete',
+                          child: Text('Delete account',
+                              style: TextStyle(color: Brand.red))),
+                    ],
                   ),
                 ],
               ),
