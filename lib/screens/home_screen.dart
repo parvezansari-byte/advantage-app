@@ -26,7 +26,6 @@ import 'finance_screen.dart';
 import 'sms_tracking_screen.dart';
 import 'delete_account_dialog.dart';
 import '../feature_flags.dart';
-import '../services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
