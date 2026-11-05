@@ -6,6 +6,7 @@ import '../main.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
+import 'market_report_screen.dart';
 import 'notifications_screen.dart';
 import 'stock_screen.dart';
 import 'planner_screen.dart';
@@ -315,6 +316,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () => Navigator.push(context,
                     MaterialPageRoute(
                         builder: (_) => const ChartOptionsScreen())),
+              ),
+              _MenuCard(
+                icon: Icons.summarize_outlined,
+                iconColor: Brand.blue,
+                title: 'Market Report (PDF)',
+                subtitle: 'Daily, weekly and monthly report with charts',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const MarketReportScreen())),
               ),
               _MenuCard(
                 icon: Icons.donut_small,
