@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import '../main.dart';
 import '../services/api_service.dart' show ApiService;
 import '../services/authed_http.dart' as http;
+import 'aum_trend_card.dart';
 
 class CrmBookScreen extends StatefulWidget {
   final String ownerEmail;
@@ -159,6 +160,8 @@ class _CrmBookScreenState extends State<CrmBookScreen> {
                 color: Brand.mint.withValues(alpha: 0.8), fontSize: 11),
           ),
         ])),
+        _title('Trend'),
+        AumTrendCard(ownerEmail: widget.ownerEmail),
         _title('Asset classes'),
         _box(Column(children: [
           for (final a in _list('asset_classes'))

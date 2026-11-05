@@ -14,6 +14,7 @@ import '../services/crm_api_service.dart';
 import 'crm_add_edit_client_screen.dart';
 import 'crm_holdings_tab.dart';
 import 'crm_orders_tab.dart';
+import 'followup_dialog.dart';
 import '../services/holdings_api_service.dart';
 import '../services/portfolio_review_service.dart';
 import 'rebalance_screen.dart';
@@ -180,6 +181,11 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
                   ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Could not load holdings: $e')));
                 }
+              } else if (v == 'followup') {
+                await editFollowup(context,
+                    ownerEmail: widget.ownerEmail,
+                    clientId: _client.id!,
+                    clientName: _client.fullName);
               } else if (v == 'tax') {
                 await Navigator.push(
                     context,
@@ -206,6 +212,10 @@ class _CrmClientDetailScreenState extends State<CrmClientDetailScreen>
               PopupMenuItem(
                   value: 'rebalance',
                   child: Text('Check against target mix',
+                      style: TextStyle(color: Brand.paper))),
+              PopupMenuItem(
+                  value: 'followup',
+                  child: Text('Follow-up / next review date',
                       style: TextStyle(color: Brand.paper))),
               PopupMenuItem(
                   value: 'tax',
