@@ -12,6 +12,8 @@ import 'package:printing/printing.dart';
 
 import '../main.dart';
 import '../services/api_service.dart' show ApiService;
+import '../services/authed_http.dart' as authed;
+import '../services/session.dart';
 
 class MarketReportScreen extends StatefulWidget {
   const MarketReportScreen({super.key});
@@ -27,6 +29,7 @@ class _MarketReportScreenState extends State<MarketReportScreen> {
   String? _error;
   Uint8List? _pdf;
   String? _pdfKind;
+  bool _mailing = false;
 
   static const _labels = {
     'daily': 'Daily',
@@ -70,6 +73,36 @@ class _MarketReportScreenState extends State<MarketReportScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _emailMe() async {
+    final email = Session.email;
+    if (email == null || email.isEmpty) return;
+    setState(() => _mailing = true);
+    String msg;
+    try {
+      final uri = Uri.parse(
+              '${ApiService.baseUrl}/report/${Uri.encodeComponent(email)}/email')
+          .replace(queryParameters: {
+        'kind': _pdfKind ?? _kind,
+        if (_note.text.trim().isNotEmpty) 'note': _note.text.trim(),
+      });
+      final res = await authed
+          .post(uri)
+          .timeout(const Duration(seconds: 120));
+      if (res.statusCode == 200) {
+        msg = 'Report emailed to $email';
+      } else if (res.statusCode == 429) {
+        msg = 'Please wait a minute before sending another email.';
+      } else {
+        msg = 'Could not send the email (${res.statusCode}).';
+      }
+    } catch (_) {
+      msg = 'Could not send the email. Check your connection and try again.';
+    }
+    if (!mounted) return;
+    setState(() => _mailing = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   String get _fileName {
@@ -201,6 +234,22 @@ class _MarketReportScreenState extends State<MarketReportScreen> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Brand.mint,
+                side: BorderSide(color: Brand.mint.withValues(alpha: 0.5)),
+                minimumSize: const Size.fromHeight(44),
+              ),
+              onPressed: _mailing ? null : _emailMe,
+              icon: _mailing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.email_outlined),
+              label: Text(_mailing ? 'Sending...' : 'Email me this report'),
             ),
           ],
           const SizedBox(height: 18),
